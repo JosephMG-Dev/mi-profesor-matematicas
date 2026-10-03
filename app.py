@@ -12,7 +12,8 @@ from database import init_db, obtener_perfil, actualizar_perfil, obtener_leccion
     obtener_logros, verificar_logros, actualizar_racha, exportar_datos, importar_datos, \
     registrar_evaluacion_diagnostica, obtener_repasos_pendientes, actualizar_leccion, \
     desbloquear_lecciones_siguientes, programar_repaso_sm2, obtener_repasos_del_dia, \
-    completar_repaso_sm2
+    completar_repaso_sm2, obtener_diagnostico_pedagogico, obtener_recomendaciones_pedagogicas, \
+    obtener_patrones_error
 from ejercicios import generar_ejercicio, verificar_respuesta, clasificar_error, \
     obtener_explicacion, generar_evaluacion_diagnostica, analizar_diagnostico
 from teoria import obtener_teoria_leccion
@@ -324,6 +325,26 @@ def api_historial():
 def api_estadisticas():
     stats = obtener_estadisticas()
     return jsonify(stats)
+
+
+@app.route('/api/pedagogia/diagnostico', methods=['GET'])
+def api_pedagogia_diagnostico():
+    diag = obtener_diagnostico_pedagogico()
+    return jsonify(diag)
+
+
+@app.route('/api/pedagogia/recomendaciones', methods=['GET'])
+def api_pedagogia_recomendaciones():
+    recs = obtener_recomendaciones_pedagogicas()
+    return jsonify(recs)
+
+
+@app.route('/api/pedagogia/patrones', methods=['GET'])
+def api_pedagogia_patrones():
+    leccion_id = request.args.get('leccion_id')
+    patrones = obtener_patrones_error(leccion_id)
+    return jsonify(patrones)
+
 
 
 @app.route('/api/repasos', methods=['GET'])

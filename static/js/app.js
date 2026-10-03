@@ -60,7 +60,10 @@ const TIPOS_ERROR = {
     'error_posicional': '📍 Error posicional',
     'error_formato': '✏️ Error de formato',
     'respuesta_azar': '🎲 Respuesta al azar',
+    'error_prestamo': '🔄 Dificultad con préstamos',
+    'error_llevada': '🔄 Dificultad con llevadas',
 };
+
 
 // Renderizador KaTeX para tipografía matemática profesional
 function renderMatematicas(elemento) {
@@ -457,27 +460,43 @@ async function cargarDashboard() {
         document.getElementById('headerAciertos').textContent = `${stats.porcentaje_aciertos}%`;
         document.getElementById('headerEjercicios').textContent = stats.total_ejercicios;
 
-        // Recomendaciones
+        // Recomendaciones Pedagógicas Inteligentes
         const recsContainer = document.getElementById('dashRecomendaciones');
         const disponibles = lecciones.filter(l => l.estado === 'disponible' || (l.estado !== 'bloqueado' && l.porcentaje_dominio < 80));
-        const recomendadas = disponibles.slice(0, 3);
+        const recomendadas = disponibles.slice(0, 2);
 
-        if (recomendadas.length === 0) {
-            recsContainer.innerHTML = `
-                <div class="empty-state">
-                    <div class="empty-state-icon">🎉</div>
-                    <div class="empty-state-text">¡Haz tu evaluación inicial!</div>
-                    <div class="empty-state-desc">Comienza practicando con las lecciones disponibles.</div>
-                    <button class="btn btn-primary mt-4" onclick="navegarA('lecciones')">Ver lecciones</button>
+        let htmlRecomendaciones = '';
+
+        // Consejos y diagnósticos cualitativos del motor pedagógico
+        if (stats.recomendaciones_pedagogicas && stats.recomendaciones_pedagogicas.length > 0) {
+            htmlRecomendaciones += stats.recomendaciones_pedagogicas.map(r => `
+                <div class="feedback" style="margin-bottom: 10px; background: rgba(99, 102, 241, 0.08); border-left: 3px solid var(--color-primary); padding: 12px 14px; border-radius: var(--radius-md);">
+                    <div style="font-weight: 600; font-size: 0.95rem; color: var(--color-primary-light); display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
+                        <span>${r.icono || '💡'}</span> <span>${r.titulo}</span>
+                    </div>
+                    <div style="font-size: 0.88rem; color: var(--color-text-secondary); line-height: 1.4;">
+                        ${r.mensaje}
+                    </div>
+                    ${r.leccion_id ? `
+                        <div class="mt-2">
+                            <button class="btn btn-sm btn-outline" onclick="iniciarPractica('${r.leccion_id}')">
+                                🚀 Practicar tema
+                            </button>
+                        </div>
+                    ` : ''}
                 </div>
-            `;
-        } else {
-            recsContainer.innerHTML = recomendadas.map(l => `
+            `).join('');
+        }
+
+        // Lecciones recomendadas para continuar
+        if (recomendadas.length > 0) {
+            htmlRecomendaciones += '<div style="font-size: 0.85rem; font-weight: 600; color: var(--color-text-secondary); margin-top: 6px; margin-bottom: 8px;">Temas sugeridos para continuar:</div>';
+            htmlRecomendaciones += recomendadas.map(l => `
                 <div class="lesson-card" onclick="iniciarPractica('${l.id}')">
                     <div class="lesson-card-header">
                         <span class="lesson-card-number">Lección ${l.id}</span>
-                        <span class="badge ${l.porcentaje_dominio > 0 ? 'badge-warning' : 'badge-info'}">
-                            ${l.porcentaje_dominio > 0 ? 'En progreso' : 'Nuevo'}
+                        <span class="badge ${l.porcentaje_dominio >= 80 ? 'badge-success' : l.porcentaje_dominio > 0 ? 'badge-warning' : 'badge-info'}">
+                            ${l.porcentaje_dominio >= 80 ? 'Dominada' : l.porcentaje_dominio > 0 ? `${l.porcentaje_dominio.toFixed(0)}%` : 'Nuevo'}
                         </span>
                     </div>
                     <div class="lesson-card-title">${l.titulo}</div>
@@ -496,6 +515,20 @@ async function cargarDashboard() {
                 </div>
             `).join('');
         }
+
+        if (!htmlRecomendaciones) {
+            recsContainer.innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-state-icon">🎉</div>
+                    <div class="empty-state-text">¡Haz tu evaluación inicial!</div>
+                    <div class="empty-state-desc">Comienza practicando con las lecciones disponibles.</div>
+                    <button class="btn btn-primary mt-4" onclick="navegarA('lecciones')">Ver lecciones</button>
+                </div>
+            `;
+        } else {
+            recsContainer.innerHTML = htmlRecomendaciones;
+        }
+
 
         // Chart: Progreso por nivel
         renderChartProgreso(stats);
@@ -1371,19 +1404,37 @@ async function cargarProgreso() {
     // Chart niveles
     renderChartNiveles(stats);
 
-    // Errores
+    // Errores y patrones pedagógicos
     const erroresContainer = document.getElementById('progresoErrores');
-    if (stats.errores_frecuentes.length === 0) {
-        erroresContainer.innerHTML = `
+    let htmlErrores = '';
+
+    // Métricas de aprendizaje cualitativas
+    if (stats.precision_primer_intento !== undefined) {
+        htmlErrores += `
+            <div class="grid-2 gap-3 mb-4" style="background: rgba(255, 255, 255, 0.03); padding: 12px; border-radius: var(--radius-md); border: 1px solid var(--color-border);">
+                <div>
+                    <div style="font-size: var(--text-xs); color: var(--color-text-secondary);">Precisión al 1er intento (Caso A)</div>
+                    <div style="font-size: 1.25rem; font-weight: 700; color: var(--color-success);">${stats.precision_primer_intento}%</div>
+                </div>
+                <div>
+                    <div style="font-size: var(--text-xs); color: var(--color-text-secondary);">Auto-correcciones (Caso B)</div>
+                    <div style="font-size: 1.25rem; font-weight: 700; color: var(--color-primary-light);">${stats.ejercicios_autocorregidos || 0} exitosas</div>
+                </div>
+            </div>
+        `;
+    }
+
+    if (!stats.errores_frecuentes || stats.errores_frecuentes.length === 0) {
+        htmlErrores += `
             <div class="empty-state">
                 <div class="empty-state-icon">👍</div>
                 <div class="empty-state-text">Sin errores registrados aún</div>
-                <div class="empty-state-desc">A medida que practiques, aquí verás los tipos de errores más comunes.</div>
+                <div class="empty-state-desc">A medida que practiques, aquí verás los tipos de errores más comunes y patrones observados.</div>
             </div>
         `;
     } else {
-        erroresContainer.innerHTML = stats.errores_frecuentes.map(e => `
-            <div class="flex items-center justify-between" style="padding: 12px 0; border-bottom: 1px solid var(--color-border);">
+        htmlErrores += stats.errores_frecuentes.map(e => `
+            <div class="flex items-center justify-between" style="padding: 10px 0; border-bottom: 1px solid var(--color-border);">
                 <div>
                     <div class="font-bold">${TIPOS_ERROR[e.tipo_error] || e.tipo_error}</div>
                 </div>
@@ -1391,6 +1442,22 @@ async function cargarProgreso() {
             </div>
         `).join('');
     }
+
+    // Patrones de error registrados
+    if (stats.patrones_error && stats.patrones_error.length > 0) {
+        htmlErrores += '<div style="font-size: 0.85rem; font-weight: 600; color: var(--color-text-secondary); margin-top: 14px; margin-bottom: 8px;">Diagnóstico de patrones observados:</div>';
+        htmlErrores += stats.patrones_error.map(p => `
+            <div class="flex items-center justify-between" style="padding: 8px 0; font-size: 0.9rem;">
+                <div>${TIPOS_ERROR[p.tipo_error] || p.tipo_error}</div>
+                <span class="badge ${p.resuelto ? 'badge-success' : 'badge-warning'}">
+                    ${p.resuelto ? '✅ Superado tras práctica' : '⚠️ En observación'}
+                </span>
+            </div>
+        `).join('');
+    }
+
+    erroresContainer.innerHTML = htmlErrores;
+
 }
 
 function renderChartNiveles(stats) {

@@ -172,17 +172,20 @@ def verificar_respuesta(respuesta_usuario, respuesta_correcta, tolerancia=0.001)
 def clasificar_error(leccion_id, operacion, respuesta_usuario, respuesta_correcta):
     """Clasificar el tipo de error cometido.
 
-    Distingue entre:
-    - error_calculo: se equivocó en las cuentas
-    - error_procedimiento: usó mal el método
-    - error_signo: confundió positivo/negativo
-    - error_posicional: se equivocó en la posición (llevadas, decimales)
-    - respuesta_azar: respuesta sin relación con el ejercicio
+    Distingue pedagógicamente entre:
+    - error_prestamo: olvido o ajuste incorrecto al pedir prestado (restas)
+    - error_llevada: olvido o ajuste incorrecto de la llevada (sumas)
+    - error_calculo: error aritmético menor en las cuentas
+    - error_procedimiento: error estructural en el método de resolución
+    - error_signo: confusión de signos positivo/negativo
+    - error_posicional: error en el orden de magnitud (factor 10/100)
+    - respuesta_azar: respuesta sin relación con la magnitud de la operación
+    - error_formato: formato de respuesta no numérico o inválido
     """
     try:
         usuario = float(str(respuesta_usuario).replace(',', '.'))
         correcta = float(str(respuesta_correcta).replace(',', '.'))
-    except ValueError:
+    except (ValueError, TypeError):
         return 'error_formato'
 
     diff = abs(usuario - correcta)
@@ -197,6 +200,17 @@ def clasificar_error(leccion_id, operacion, respuesta_usuario, respuesta_correct
         if ratio in (10, 0.1, 100, 0.01):
             return 'error_posicional'
 
+    op_str = str(operacion or '')
+    lid_str = str(leccion_id or '')
+
+    # Detección específica de error con préstamos en restas (diferencia de 10, 100, 1000)
+    if ('-' in op_str or lid_str in ('1.2', '1.4', '1.5')) and diff in (10, 100, 1000):
+        return 'error_prestamo'
+
+    # Detección específica de error con llevadas en sumas (diferencia de 10, 100, 1000)
+    if ('+' in op_str or lid_str in ('1.1', '1.3', '1.5')) and diff in (10, 100, 1000):
+        return 'error_llevada'
+
     # Error pequeño de cálculo
     if diff <= max(abs(correcta) * 0.1, 5):
         return 'error_calculo'
@@ -204,11 +218,12 @@ def clasificar_error(leccion_id, operacion, respuesta_usuario, respuesta_correct
     # Error grande - posible azar o procedimiento mal
     if diff > abs(correcta) * 0.5:
         # Verificar si parece aleatorio
-        if leccion_id.startswith('1.') and diff > 50:
+        if lid_str.startswith('1.') and diff > 50:
             return 'respuesta_azar'
         return 'error_procedimiento'
 
     return 'error_calculo'
+
 
 
 def obtener_explicacion(leccion_id, operacion, respuesta_correcta, respuesta_usuario=None):
