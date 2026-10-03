@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mi Profesor de Matemáticas</title>
+    <meta name="description" content="Tu profesor personal de matemáticas. Aprende a tu ritmo desde las bases hasta ingeniería.">
+    <link rel="stylesheet" href="/static/css/styles.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+</head>
+<body>
+    <div class="app-container" id="app">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="header-content">
+                <a href="#" class="app-logo" onclick="navegarA('dashboard')">
+                    <span class="app-logo-icon">🎓</span>
+                    <span class="app-logo-text">Mi Profesor de Mates</span>
+                </a>
+                <div class="header-stats" id="headerStats">
+                    <div class="streak" id="headerStreak">
+                        <span class="streak-fire">🔥</span>
+                        <span class="streak-count" id="headerRacha">0</span>
+                        <span class="text-muted" style="font-size: var(--text-sm)">días</span>
+                    </div>
+                    <div class="header-stat">
+                        <span>📊</span>
+                        <span class="header-stat-value" id="headerAciertos">0%</span>
+                    </div>
+                    <div class="header-stat">
+                        <span>📝</span>
+                        <span class="header-stat-value" id="headerEjercicios">0</span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Navigation -->
+        <div class="main-content">
+            <nav class="nav-tabs" id="navTabs">
+                <button class="nav-tab active" onclick="navegarA('dashboard')" data-tab="dashboard">
+                    <span class="nav-tab-icon">🏠</span> Inicio
+                </button>
+                <button class="nav-tab" onclick="navegarA('lecciones')" data-tab="lecciones">
+                    <span class="nav-tab-icon">📚</span> Lecciones
+                </button>
+                <button class="nav-tab" onclick="navegarA('practicar')" data-tab="practicar">
+                    <span class="nav-tab-icon">✏️</span> Practicar
+                </button>
+                <button class="nav-tab" onclick="navegarA('progreso')" data-tab="progreso">
+                    <span class="nav-tab-icon">📈</span> Progreso
+                </button>
+                <button class="nav-tab" onclick="navegarA('historial')" data-tab="historial">
+                    <span class="nav-tab-icon">📋</span> Historial
+                </button>
+                <button class="nav-tab" onclick="navegarA('logros')" data-tab="logros">
+                    <span class="nav-tab-icon">🏆</span> Logros
+                </button>
+                <button class="nav-tab" onclick="navegarA('ajustes')" data-tab="ajustes">
+                    <span class="nav-tab-icon">⚙️</span> Ajustes
+                </button>
+            </nav>
+
+            <!-- ============================================================ -->
+            <!-- VISTA: EVALUACIÓN DIAGNÓSTICA -->
+            <!-- ============================================================ -->
+            <section class="view-section" id="view-diagnostico">
+                <div class="diagnostic-welcome" id="diagnosticoWelcome">
+                    <h1>¡Bienvenido!</h1>
+                    <p>
+                        Soy tu profesor personal de matemáticas. Antes de comenzar, quiero conocer
+                        en qué punto te encuentras. Voy a hacerte algunas preguntas sencillas,
+                        empezando por las más básicas.<br><br>
+                        No te preocupes por equivocarte. Esto es solo para saber por dónde empezar.
+                    </p>
+                    <button class="btn btn-primary btn-lg" onclick="iniciarDiagnostico()">
+                        Comenzar evaluación 🚀
+                    </button>
+                </div>
+
+                <div id="diagnosticoArea" class="hidden">
+                    <div class="diagnostic-progress">
+                        <div class="diagnostic-counter">
+                            Pregunta <span id="diagPreguntaActual">1</span> de <span id="diagPreguntaTotal">16</span>
+                        </div>
+                        <div class="progress-bar progress-bar-lg">
+                            <div class="progress-bar-fill" id="diagProgressBar" style="width: 0%"></div>
+                        </div>
+                    </div>
+
+                    <div class="exercise-area">
+                        <div class="exercise-question">
+                            <div class="exercise-label" id="diagNivel">Nivel 1</div>
+                            <div class="exercise-operation" id="diagOperacion"></div>
+                        </div>
+
+                        <div class="exercise-input-area">
+                            <input type="text" class="input input-big" id="diagRespuesta"
+                                   placeholder="Tu respuesta" autocomplete="off"
+                                   onkeypress="if(event.key==='Enter')verificarDiagnostico()">
+                        </div>
+
+                        <div class="exercise-actions">
+                            <button class="btn btn-primary btn-lg" onclick="verificarDiagnostico()">
+                                Responder ✓
+                            </button>
+                            <button class="btn btn-outline" onclick="marcarTemaNoConocido()">
+                                🤷 No conozco este tema todavía
+                            </button>
+                            <button class="btn btn-ghost" onclick="saltarDiagnostico()">
+                                Saltar →
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="diagnosticoResultados" class="hidden">
+                    <!-- Se llena dinámicamente -->
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <!-- VISTA: DASHBOARD -->
+            <!-- ============================================================ -->
+            <section class="view-section" id="view-dashboard">
+                <!-- Friendly Welcome Mascot Banner -->
+                <div class="welcome-banner mb-6">
+                    <div class="welcome-mascot">🧑‍🏫</div>
+                    <div class="welcome-content">
+                        <div class="welcome-badge-line">
+                            <span class="badge badge-calm">🌱 Sin prisa ni presiones</span>
+                            <span class="badge badge-info">💡 Pistas paso a paso</span>
+                            <span class="badge badge-primary">🎓 54 lecciones organizadas</span>
+                        </div>
+                        <h2 class="welcome-title">¡Hola! Tu espacio seguro para dominar las matemáticas</h2>
+                        <p class="welcome-subtitle">Avanza a tu propio ritmo. Aquí no hay cronómetros que te apuren ni juicios: equivocarse es la forma natural en que el cerebro aprende y consolida conceptos.</p>
+                        <div class="welcome-quote" id="welcomeMotivationalQuote">
+                            ✨ "Un viaje de mil kilómetros empieza con un solo paso. Hoy ya diste el primero."
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Stat cards -->
+                <div class="grid-4 mb-6" id="dashboardStats">
+                    <div class="stat-card">
+                        <div class="stat-card-icon" style="background: var(--color-primary-glow)">📝</div>
+                        <div class="stat-card-value" id="dashTotalEjercicios">0</div>
+                        <div class="stat-card-label">Ejercicios resueltos</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-card-icon" style="background: var(--color-success-bg)">✅</div>
+                        <div class="stat-card-value text-success" id="dashPorcentaje">0%</div>
+                        <div class="stat-card-label">Porcentaje de aciertos</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-card-icon" style="background: var(--color-warning-bg)">🔥</div>
+                        <div class="stat-card-value text-warning" id="dashRacha">0</div>
+                        <div class="stat-card-label">Racha de días</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-card-icon" style="background: var(--color-info-bg)">⏱️</div>
+                        <div class="stat-card-value" id="dashTiempo">0 min</div>
+                        <div class="stat-card-label">Tiempo de estudio</div>
+                    </div>
+                </div>
+
+                <div class="grid-2 gap-4">
+                    <!-- Progreso general -->
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-title">📊 Tu progreso</div>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="chartProgreso"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Recomendaciones -->
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-title">🎯 Hoy te recomiendo</div>
+                        </div>
+                        <div id="dashRecomendaciones" class="flex flex-col gap-4">
+                            <!-- Se llena dinámicamente -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Evolución diaria -->
+                <div class="card mt-6">
+                    <div class="card-header">
+                        <div class="card-title">📈 Tu evolución (últimos 30 días)</div>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="chartEvolucion"></canvas>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <!-- VISTA: LECCIONES -->
+            <!-- ============================================================ -->
+            <section class="view-section" id="view-lecciones">
+                <div class="section-header flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
+                    <div>
+                        <h2 class="section-title">📚 Mapa de lecciones (54 temas)</h2>
+                        <p class="text-muted" style="font-size: var(--text-sm); margin-top: 4px;">Desde las operaciones básicas de primaria hasta las 16 sesiones de Matemática para la Ingeniería.</p>
+                    </div>
+                </div>
+                <!-- Filtros amigables de nivel -->
+                <div class="level-filter-bar mb-6" id="levelFilterBar">
+                    <button class="level-filter-btn active" onclick="filtrarNivel('todos')" data-level="todos">⭐ Todos (54)</button>
+                    <button class="level-filter-btn" onclick="filtrarNivel(1)" data-level="1">N1: Sumas</button>
+                    <button class="level-filter-btn" onclick="filtrarNivel(2)" data-level="2">N2: Tablas</button>
+                    <button class="level-filter-btn" onclick="filtrarNivel(3)" data-level="3">N3: Divisiones</button>
+                    <button class="level-filter-btn" onclick="filtrarNivel(4)" data-level="4">N4: Fracciones</button>
+                    <button class="level-filter-btn" onclick="filtrarNivel(5)" data-level="5">N5: Potencias/Log</button>
+                    <button class="level-filter-btn" onclick="filtrarNivel(6)" data-level="6">N6: Álgebra/CS</button>
+                    <button class="level-filter-btn btn-highlight" onclick="filtrarNivel(7)" data-level="7">🎓 N7: Universidad (16 sesiones)</button>
+                </div>
+                <div id="leccionesContenido">
+                    <!-- Se llena dinámicamente -->
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <!-- VISTA: PRACTICAR -->
+            <!-- ============================================================ -->
+            <section class="view-section" id="view-practicar">
+                <div class="exercise-area" id="exerciseArea">
+                    <!-- Selector de lección -->
+                    <div class="card mb-6" id="leccionSelector">
+                        <div class="card-title mb-4">📝 Elige qué practicar</div>
+                        <div id="leccionesDisponibles" class="flex flex-col gap-4">
+                            <!-- Se llena dinámicamente -->
+                        </div>
+                    </div>
+
+                    <!-- Contenedor del tema actual (Estilo Khan Academy) -->
+                    <div id="temaActivoContainer" class="hidden">
+                        <!-- Cabecera del tema -->
+                        <div class="flex items-center justify-between mb-4">
+                            <div>
+                                <span class="badge badge-primary" id="temaBadge">1.1</span>
+                                <span class="text-muted font-bold" id="temaNombre" style="margin-left: 8px;"></span>
+                            </div>
+                            <div class="flex items-center gap-4">
+                                <span class="badge badge-calm" title="Tiempo medido silenciosamente en segundo plano">🌱 Sin prisa, a tu ritmo</span>
+                                <button class="btn btn-ghost btn-sm" onclick="volverASelector()">
+                                    ← Cambiar tema
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Stepper de 3 Fases (Khan Academy) -->
+                        <div class="topic-stepper mb-6">
+                            <button class="step-btn active" id="btnFaseTeoria" onclick="cambiarFaseTema('teoria')">
+                                <span class="step-num">1</span>
+                                <span class="step-label">📖 1. Teoría y Ejemplos</span>
+                            </button>
+                            <div class="step-divider"></div>
+                            <button class="step-btn" id="btnFasePractica" onclick="cambiarFaseTema('practica')">
+                                <span class="step-num">2</span>
+                                <span class="step-label">✏️ 2. Práctica con Ayudas</span>
+                            </button>
+                            <div class="step-divider"></div>
+                            <button class="step-btn" id="btnFaseExamen" onclick="cambiarFaseTema('examen')">
+                                <span class="step-num">3</span>
+                                <span class="step-label">🎯 3. Examen de Dominio</span>
+                            </button>
+                        </div>
+
+                        <!-- ============================================== -->
+                        <!-- FASE 1: TEORÍA Y EJEMPLOS RESUELTOS -->
+                        <!-- ============================================== -->
+                        <div id="faseTeoria" class="topic-phase">
+                            <div class="card theory-card mb-6">
+                                <div class="theory-header mb-4">
+                                    <h3 class="theory-title" id="teoriaTitulo">Cargando lección...</h3>
+                                    <div class="text-muted" id="teoriaSubtitulo"></div>
+                                </div>
+
+                                <div class="theory-section mb-5">
+                                    <div class="theory-subtitle">💡 ¿Qué es este tema?</div>
+                                    <p class="theory-text" id="teoriaConcepto"></p>
+                                </div>
+
+                                <div class="theory-section mb-5">
+                                    <div class="theory-subtitle">🧠 ¿Por qué funciona?</div>
+                                    <p class="theory-text" id="teoriaPorQue"></p>
+                                </div>
+
+                                <div class="theory-section mb-5 engineering-box">
+                                    <div class="theory-subtitle">💻 Conexión con Ingeniería de Sistemas</div>
+                                    <p class="theory-text" id="teoriaIngenieria"></p>
+                                </div>
+
+                                <!-- Ejemplo modelo resuelto paso a paso -->
+                                <div class="theory-section mb-5 example-box">
+                                    <div class="theory-subtitle">📝 Ejemplo modelo resuelto paso a paso</div>
+                                    <div class="example-problem font-bold mb-3" id="teoriaEjemploProblema"></div>
+                                    <div class="example-steps flex flex-col gap-2" id="teoriaEjemploPasos"></div>
+                                    <div class="example-result mt-3 text-success font-bold" id="teoriaEjemploResultado"></div>
+                                </div>
+
+                                <!-- Errores comunes y Truco del profesor -->
+                                <div class="grid-2 gap-4 mb-6">
+                                    <div class="warning-box">
+                                        <div class="font-bold mb-2">⚠️ Errores comunes a evitar</div>
+                                        <ul class="clean-list" id="teoriaErrores"></ul>
+                                    </div>
+                                    <div class="tip-box">
+                                        <div class="font-bold mb-2">💡 Consejo del profesor</div>
+                                        <p id="teoriaTruco"></p>
+                                    </div>
+                                </div>
+
+                                <div class="text-center mt-6">
+                                    <button class="btn btn-primary btn-lg" onclick="cambiarFaseTema('practica')">
+                                        ¡Entendido! Ir a la Práctica con Ayudas ➡️
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- ============================================== -->
+                        <!-- FASE 2: PRÁCTICA GUIADA CON AYUDAS -->
+                        <!-- ============================================== -->
+                        <div id="fasePractica" class="topic-phase hidden">
+                            <div class="card mb-4" style="background: rgba(99, 102, 241, 0.05); border-color: rgba(99, 102, 241, 0.2);">
+                                <div class="flex items-center justify-between">
+                                    <div>
+                                        <strong>Fase de Práctica</strong>: Resuelve ejercicios para afianzar el tema. Si tienes dudas, usa las pistas o consulta la teoría.
+                                    </div>
+                                    <button class="btn btn-ghost btn-sm" onclick="cambiarFaseTema('teoria')">
+                                        📖 Releer teoría
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="exercise-question">
+                                <div class="exercise-label" id="ejDificultad">Dificultad 1</div>
+                                <div class="exercise-operation" id="ejOperacion"></div>
+                                <div class="exercise-hint hidden" id="ejExplicacionPrevia"></div>
+                            </div>
+
+                            <div class="exercise-input-area">
+                                <input type="text" class="input input-big" id="ejRespuesta"
+                                       placeholder="Tu respuesta" autocomplete="off"
+                                       onkeypress="if(event.key==='Enter')verificarEjercicio()">
+                            </div>
+
+                            <div class="exercise-actions" id="ejAcciones">
+                                <button class="btn btn-primary btn-lg" onclick="verificarEjercicio()" id="btnVerificar">
+                                    Verificar ✓
+                                </button>
+                                <button class="btn btn-outline" onclick="mostrarPista()" id="btnPista">
+                                    💡 Pedir pista
+                                </button>
+                                <button class="btn btn-ghost" onclick="mostrarAyudaCompleta()" id="btnExplicar">
+                                    🤷 No sé cómo resolver esto
+                                </button>
+                            </div>
+
+                            <!-- Feedback -->
+                            <div id="ejFeedback" class="hidden"></div>
+
+                            <!-- Explicación paso a paso si falló o pidió ayuda -->
+                            <div id="ejExplicacion" class="hidden"></div>
+
+                            <!-- Acciones post-respuesta -->
+                            <div id="ejPostAcciones" class="hidden exercise-actions mt-4">
+                                <button class="btn btn-outline btn-lg" onclick="intentarDeNuevo()" id="btnReintentar">
+                                    🔄 Intentar de nuevo con calma
+                                </button>
+                                <button class="btn btn-primary btn-lg" onclick="siguienteEjercicio()" id="btnSiguienteEj">
+                                    Siguiente ejercicio de práctica →
+                                </button>
+                                <button class="btn btn-success btn-lg" onclick="cambiarFaseTema('examen')" id="btnIrExamenPrompt">
+                                    🎯 Ir al Examen de la lección
+                                </button>
+                            </div>
+
+                            <!-- Progreso de práctica -->
+                            <div class="card mt-6">
+                                <div class="flex items-center justify-between mb-2">
+                                    <span class="text-muted">Progreso de práctica</span>
+                                    <span class="font-bold" id="ejDominio">0%</span>
+                                </div>
+                                <div class="progress-bar progress-bar-lg">
+                                    <div class="progress-bar-fill" id="ejDominioBar" style="width: 0%"></div>
+                                </div>
+                                <div class="flex items-center justify-between mt-3">
+                                    <span class="text-muted" style="font-size: var(--text-sm)">Resuelve varios ejercicios con confianza antes del examen.</span>
+                                    <button class="btn btn-outline btn-sm" onclick="cambiarFaseTema('examen')">
+                                        Tomar Examen ahora 🎯
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- ============================================== -->
+                        <!-- FASE 3: EXAMEN DE DOMINIO (SIN PISTAS) -->
+                        <!-- ============================================== -->
+                        <div id="faseExamen" class="topic-phase hidden">
+                            <div class="card exam-card mb-6">
+                                <div class="flex items-center justify-between mb-4">
+                                    <div>
+                                        <h3 style="font-size: var(--text-xl);">🎯 Examen de Dominio</h3>
+                                        <div class="text-muted" style="font-size: var(--text-sm);">
+                                            4 preguntas sin pistas ni ayudas. Mide tu conocimiento real para dominar la lección.
+                                        </div>
+                                    </div>
+                                    <span class="badge badge-warning" id="examProgresoTexto">Pregunta 1 de 4</span>
+                                </div>
+
+                                <div class="progress-bar mb-6">
+                                    <div class="progress-bar-fill" id="examProgressBar" style="width: 25%;"></div>
+                                </div>
+
+                                <div id="examAreaPregunta">
+                                    <div class="exercise-question">
+                                        <div class="exercise-label" id="examDificultad">Pregunta de examen</div>
+                                        <div class="exercise-operation" id="examOperacion"></div>
+                                    </div>
+
+                                    <div class="exercise-input-area">
+                                        <input type="text" class="input input-big" id="examRespuesta"
+                                               placeholder="Tu respuesta" autocomplete="off"
+                                               onkeypress="if(event.key==='Enter')responderPreguntaExamen()">
+                                    </div>
+
+                                    <div class="exercise-actions">
+                                        <button class="btn btn-primary btn-lg" onclick="responderPreguntaExamen()">
+                                            Confirmar y siguiente ➡️
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- Resultados del examen -->
+                                <div id="examResultados" class="hidden text-center">
+                                    <div id="examIconoResultado" style="font-size: 3rem; margin-bottom: 12px;">🎉</div>
+                                    <h2 id="examTituloResultado" class="mb-2">¡Examen Completado!</h2>
+                                    <p id="examMensajeResultado" class="text-muted mb-4"></p>
+
+                                    <div class="card mb-6" style="background: rgba(255,255,255,0.02); text-align: left;" id="examDetallesRespuestas">
+                                        <!-- Detalles de cada pregunta -->
+                                    </div>
+
+                                    <div class="flex items-center justify-center gap-4">
+                                        <button class="btn btn-outline" onclick="cambiarFaseTema('practica')">
+                                            ✏️ Volver a practicar
+                                        </button>
+                                        <button class="btn btn-primary" onclick="volverASelector()">
+                                            📚 Ver todas las lecciones
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <!-- VISTA: PROGRESO -->
+            <!-- ============================================================ -->
+            <section class="view-section" id="view-progreso">
+                <div class="section-header">
+                    <h2 class="section-title">📈 Tu progreso detallado</h2>
+                </div>
+
+                <div class="grid-3 mb-6" id="progresoStats">
+                    <div class="stat-card">
+                        <div class="stat-card-label">Lecciones dominadas</div>
+                        <div class="stat-card-value text-success" id="progDominadas">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-card-label">En progreso</div>
+                        <div class="stat-card-value text-warning" id="progEnProgreso">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-card-label">Pendientes</div>
+                        <div class="stat-card-value text-muted" id="progPendientes">0</div>
+                    </div>
+                </div>
+
+                <!-- Gráfico de aciertos por nivel -->
+                <div class="card mb-6">
+                    <div class="card-header">
+                        <div class="card-title">Aciertos por nivel</div>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="chartNiveles"></canvas>
+                    </div>
+                </div>
+
+                <!-- Errores frecuentes -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">⚠️ Errores más frecuentes</div>
+                    </div>
+                    <div id="progresoErrores">
+                        <!-- Se llena dinámicamente -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <!-- VISTA: HISTORIAL -->
+            <!-- ============================================================ -->
+            <section class="view-section" id="view-historial">
+                <div class="section-header">
+                    <h2 class="section-title">📋 Historial de ejercicios</h2>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">Últimos ejercicios</div>
+                        <select class="input" style="width:auto;min-height:40px;font-size:var(--text-sm);font-family:var(--font-body);text-align:left;" id="historialFiltro" onchange="cargarHistorial()">
+                            <option value="">Todas las lecciones</option>
+                        </select>
+                    </div>
+                    <div style="overflow-x: auto;">
+                        <table class="history-table" id="historialTabla">
+                            <thead>
+                                <tr>
+                                    <th>Fecha</th>
+                                    <th>Lección</th>
+                                    <th>Operación</th>
+                                    <th>Tu respuesta</th>
+                                    <th>Correcta</th>
+                                    <th>Resultado</th>
+                                    <th>Tiempo</th>
+                                    <th>Intentos</th>
+                                </tr>
+                            </thead>
+                            <tbody id="historialBody">
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="text-center mt-4">
+                        <button class="btn btn-outline btn-sm" onclick="cargarMasHistorial()" id="btnMasHistorial">
+                            Cargar más
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <!-- VISTA: LOGROS -->
+            <!-- ============================================================ -->
+            <section class="view-section" id="view-logros">
+                <div class="section-header">
+                    <h2 class="section-title">🏆 Logros</h2>
+                </div>
+                <div class="grid-2" id="logrosContenido">
+                    <!-- Se llena dinámicamente -->
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <!-- VISTA: AJUSTES -->
+            <!-- ============================================================ -->
+            <section class="view-section" id="view-ajustes">
+                <div class="section-header">
+                    <h2 class="section-title">⚙️ Ajustes</h2>
+                </div>
+
+                <div class="card mb-6">
+                    <div class="card-title mb-4">🎯 Objetivo diario</div>
+                    <div class="flex items-center gap-4">
+                        <button class="btn btn-outline" onclick="cambiarObjetivo(10)" id="obj10">10 min</button>
+                        <button class="btn btn-outline" onclick="cambiarObjetivo(15)" id="obj15">15 min</button>
+                        <button class="btn btn-outline" onclick="cambiarObjetivo(20)" id="obj20">20 min</button>
+                    </div>
+                </div>
+
+                <div class="card mb-6">
+                    <div class="card-title mb-4">💾 Copia de seguridad</div>
+                    <div class="flex items-center gap-4" style="flex-wrap: wrap;">
+                        <button class="btn btn-primary" onclick="exportarDatos()">
+                            📥 Exportar mis datos
+                        </button>
+                        <label class="btn btn-outline" style="cursor: pointer;">
+                            📤 Importar datos
+                            <input type="file" accept=".json" style="display:none" onchange="importarDatos(event)">
+                        </label>
+                    </div>
+                    <p class="text-muted mt-4" style="font-size: var(--text-sm)">
+                        Exporta todos tus datos como un archivo JSON. Puedes importarlos después para restaurar tu progreso.
+                    </p>
+                </div>
+
+                <div class="card">
+                    <div class="card-title mb-4">🔄 Reiniciar evaluación diagnóstica</div>
+                    <p class="text-muted mb-4" style="font-size: var(--text-sm)">
+                        Si quieres volver a hacer la evaluación inicial para recalcular tu nivel.
+                    </p>
+                    <button class="btn btn-outline" onclick="reiniciarDiagnostico()" style="border-color: var(--color-error); color: var(--color-error);">
+                        Reiniciar evaluación
+                    </button>
+                </div>
+            </section>
+        </div>
+
+        <!-- Toast container -->
+        <div class="toast-container" id="toastContainer"></div>
+    </div>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html>

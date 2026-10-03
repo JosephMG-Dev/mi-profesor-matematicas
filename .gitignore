@@ -1,0 +1,19 @@
+# Credenciales y variables de entorno locales
+.env
+
+# Archivos de caché de Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+
+# Entornos virtuales
+venv/
+env/
+ENV/
+
+# Base de datos local y temporales
+*.log
+*.tmp
+.DS_Store
+Thumbs.db
