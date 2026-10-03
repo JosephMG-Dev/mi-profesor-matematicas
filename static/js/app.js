@@ -355,14 +355,65 @@ async function cargarDashboard() {
     try {
         actualizarFraseMotivacional();
 
-        const [stats, perfil, lecciones] = await Promise.all([
+        const [stats, perfil, lecciones, repasosData] = await Promise.all([
             api('/api/estadisticas'),
             api('/api/perfil'),
             api('/api/lecciones'),
+            api('/api/repasos/hoy').catch(() => ({ total: 0, repasos: [] })),
         ]);
 
         Estado.perfil = perfil;
         actualizarHeader();
+
+        // Repetición Espaciada SM-2 Banner (Día 1, 3, 7, 21)
+        const sm2Banner = document.getElementById('spacedRepetitionBanner');
+        if (sm2Banner) {
+            if (repasosData && repasosData.total > 0) {
+                sm2Banner.classList.remove('hidden');
+                sm2Banner.innerHTML = `
+                    <div class="card" style="border: 2px solid var(--color-primary); background: linear-gradient(135deg, rgba(59, 130, 246, 0.12), rgba(139, 92, 246, 0.08));">
+                        <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+                            <div class="flex items-center gap-3">
+                                <span style="font-size: 2rem;">🔔</span>
+                                <div>
+                                    <h3 style="margin: 0; font-size: 1.15rem; font-weight: 700; color: var(--color-primary-light);">
+                                        Repaso Espaciado SM-2 conectado a tu Racha Diaria 🔥
+                                    </h3>
+                                    <p class="text-muted" style="margin: 0; font-size: var(--text-sm);">
+                                        Tienes <strong>${repasosData.total} tema(s)</strong> listos para repasar hoy antes de tu nueva lección (fija conceptos en memoria permanente).
+                                    </p>
+                                </div>
+                            </div>
+                            <span class="badge badge-warning" style="font-size: 0.85rem; padding: 6px 12px;">⚡ Prioridad de hoy</span>
+                        </div>
+                        <div class="flex flex-col gap-2 mt-2">
+                            ${repasosData.repasos.map(r => `
+                                <div class="flex items-center justify-between p-3 rounded-lg" style="background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); flex-wrap: wrap; gap: 8px;">
+                                    <div class="flex items-center gap-3">
+                                        <span class="badge badge-info">Lección ${r.leccion_id}</span>
+                                        <div>
+                                            <strong style="color: var(--text-bright);">${r.titulo}</strong>
+                                            <div class="text-muted" style="font-size: var(--text-xs);">${r.descripcion || ''}</div>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <button class="btn btn-sm btn-primary" onclick="iniciarPractica('${r.leccion_id}')">
+                                            Repasar lección ✏️
+                                        </button>
+                                        <button class="btn btn-sm btn-outline" title="Marcar completado" onclick="marcarRepasoCompletado(${r.id}, '${r.leccion_id}')">
+                                            ✓ Hecho
+                                        </button>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            } else {
+                sm2Banner.classList.add('hidden');
+                sm2Banner.innerHTML = '';
+            }
+        }
 
         // Stat cards
         document.getElementById('dashTotalEjercicios').textContent = stats.total_ejercicios;
@@ -420,6 +471,19 @@ async function cargarDashboard() {
 
     } catch (e) {
         console.error('Error cargando dashboard:', e);
+    }
+}
+
+async function marcarRepasoCompletado(repasoId, leccionId) {
+    try {
+        await api(`/api/repasos/${repasoId}/completar`, {
+            method: 'POST',
+            body: { resultado: 100 }
+        });
+        mostrarToast('🎉', `¡Repaso de la Lección ${leccionId} completado! Siguiente intervalo SM-2 programado.`, 'achievement');
+        cargarDashboard();
+    } catch (e) {
+        mostrarToast('❌', 'Error al completar el repaso', 'error');
     }
 }
 

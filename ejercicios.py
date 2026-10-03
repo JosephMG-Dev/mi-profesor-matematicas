@@ -62,6 +62,7 @@ def generar_ejercicio(leccion_id, dificultad=1):
         '6.7': _productos_notables,
         '6.8': _ecuaciones_cuadraticas,
         '6.9': _sistemas_numericos,
+        '6.10': _logica_proposicional,
         '7.1': _reales_desigualdades,
         '7.2': _expresiones_racionales,
         '7.3': _matrices_operaciones,
@@ -95,6 +96,14 @@ def verificar_respuesta(respuesta_usuario, respuesta_correcta, tolerancia=0.001)
     c_str = str(respuesta_correcta).strip().lower()
 
     if u_str == c_str:
+        return True
+
+    # Normalización para respuestas booleanas / de lógica proposicional (V/F, True/False, 1/0)
+    truthy = {'v', 'verdadero', 'true', '1', 't'}
+    falsy = {'f', 'falso', 'false', '0'}
+    if c_str in truthy and u_str in truthy:
+        return True
+    if c_str in falsy and u_str in falsy:
         return True
 
     # Quitar posibles prefijos como 'x =' o 'x='
@@ -1372,6 +1381,122 @@ def _sistemas_numericos(dificultad):
             'explicacion_previa': 'En hexadecimal la base es 16: dígito_izq × 16 + dígito_der × 1.',
             'pistas': [f'0x{h_str} = {n}'],
             'numeros': {'n': n},
+        }
+
+
+def _logica_proposicional(dificultad):
+    """Generador de ejercicios de Lógica Proposicional y Álgebra de Boole."""
+    tipos = ['tablas_verdad', 'implicacion', 'programacion_condicional', 'de_morgan']
+    if dificultad == 1:
+        tipo = random.choice(['tablas_verdad', 'programacion_condicional'])
+    elif dificultad == 2:
+        tipo = random.choice(['tablas_verdad', 'implicacion', 'programacion_condicional'])
+    else:
+        tipo = random.choice(tipos)
+
+    if tipo == 'tablas_verdad':
+        op = random.choice(['AND', 'OR', 'XOR', 'NOT_AND'])
+        p = random.choice([True, False])
+        q = random.choice([True, False])
+        p_str = 'V' if p else 'F'
+        q_str = 'V' if q else 'F'
+
+        if op == 'AND':
+            res = p and q
+            texto = f'Dadas las proposiciones p = {p_str} y q = {q_str}, calcula el valor de verdad de (p ∧ q) [p AND q]: (responde V o F)'
+            pista = 'La conjunción (AND) solo es Verdadera (V) cuando AMBAS proposiciones son verdaderas.'
+        elif op == 'OR':
+            res = p or q
+            texto = f'Dadas las proposiciones p = {p_str} y q = {q_str}, calcula el valor de verdad de (p ∨ q) [p OR q]: (responde V o F)'
+            pista = 'La disyunción (OR) es Verdadera (V) si al menos UNA de las proposiciones es verdadera.'
+        elif op == 'XOR':
+            res = p != q
+            texto = f'Dadas las proposiciones p = {p_str} y q = {q_str}, calcula el valor de verdad de la disyunción exclusiva (p ⊕ q) [p XOR q]: (responde V o F)'
+            pista = 'El XOR solo es Verdadero (V) cuando las dos proposiciones tienen valores DISTINTOS.'
+        else:
+            res = not (p and q)
+            texto = f'Dadas p = {p_str} y q = {q_str}, calcula ¬(p ∧ q) [NOT(p AND q)]: (responde V o F)'
+            pista = f'Primero evalúa (p ∧ q) = {"V" if (p and q) else "F"}, y luego niégalo (invierte su valor).'
+
+        res_str = 'V' if res else 'F'
+        return {
+            'operacion': texto,
+            'respuesta_correcta': res_str,
+            'tipo': 'logica_proposicional',
+            'dificultad': dificultad,
+            'explicacion_previa': 'Evalúa los valores de verdad paso a paso usando las tablas de verdad fundamentales.',
+            'pistas': [pista, f'Resultado final: {res_str}'],
+            'numeros': {'p': p_str, 'q': q_str},
+        }
+
+    elif tipo == 'implicacion':
+        p = random.choice([True, False])
+        q = random.choice([True, False])
+        p_str = 'V' if p else 'F'
+        q_str = 'V' if q else 'F'
+        res = (not p) or q
+        res_str = 'V' if res else 'F'
+        return {
+            'operacion': f'En lógica proposicional, evalúa el valor de verdad de la condicional (p → q) [si p entonces q] cuando p = {p_str} y q = {q_str}: (responde V o F)',
+            'respuesta_correcta': res_str,
+            'tipo': 'logica_proposicional',
+            'dificultad': dificultad,
+            'explicacion_previa': 'La implicación (p → q) solo es FALSA cuando una premisa Verdadera lleva a una conclusión Falsa (V → F = F). En cualquier otro caso es Verdadera.',
+            'pistas': [
+                'Recuerda la regla de oro: V → F es Falso. Cualquier otro caso (V → V, F → V, F → F) es Verdadero.',
+                f'Aquí tenemos: {p_str} → {q_str} = {res_str}',
+            ],
+            'numeros': {'p': p_str, 'q': q_str},
+        }
+
+    elif tipo == 'programacion_condicional':
+        x = random.randint(1, 20)
+        corte1 = random.randint(5, 12)
+        corte2 = random.randint(13, 18)
+        cond = random.choice(['and', 'or', 'not'])
+
+        if cond == 'and':
+            res = (x > corte1) and (x < corte2)
+            op_text = f'En un programa, se evalúa: if (x > {corte1} and x < {corte2}) con x = {x}. ¿Se ejecutará el bloque if? (responde V o F)'
+            pista = f'Evalúa cada condición: ({x} > {corte1}) es {"V" if x > corte1 else "F"} y ({x} < {corte2}) es {"V" if x < corte2 else "F"}.'
+        elif cond == 'or':
+            res = (x < corte1) or (x > corte2)
+            op_text = f'En un programa, se evalúa: if (x < {corte1} or x > {corte2}) con x = {x}. ¿Se ejecutará el bloque if? (responde V o F)'
+            pista = f'Como es OR, basta con que una se cumpla: ({x} < {corte1}) = {"V" if x < corte1 else "F"}, ({x} > {corte2}) = {"V" if x > corte2 else "F"}.'
+        else:
+            res = not (x == corte1)
+            op_text = f'En un programa con x = {x}, se evalúa: if not (x == {corte1}). ¿El resultado de la condición es Verdadero (V) o Falso (F)?'
+            pista = f'¿Es {x} == {corte1}? {"V" if x == corte1 else "F"}. Al aplicar NOT, se invierte.'
+
+        res_str = 'V' if res else 'F'
+        return {
+            'operacion': op_text,
+            'respuesta_correcta': res_str,
+            'tipo': 'logica_booleana',
+            'dificultad': dificultad,
+            'explicacion_previa': 'En programación (if/else), las condiciones compuestas se resuelven con álgebra de Boole idéntica a la lógica matemática.',
+            'pistas': [pista, f'La condición evalúa a: {res_str}'],
+            'numeros': {'x': x},
+        }
+
+    else:
+        a = random.choice([True, False])
+        b = random.choice([True, False])
+        a_str = 'V' if a else 'F'
+        b_str = 'V' if b else 'F'
+        res = not (a or b)
+        res_str = 'V' if res else 'F'
+        return {
+            'operacion': f'Aplicando las Leyes de De Morgan, simplifica y evalúa ¬(A ∨ B) [NOT(A OR B)] con A = {a_str} y B = {b_str}: (responde V o F)',
+            'respuesta_correcta': res_str,
+            'tipo': 'de_morgan',
+            'dificultad': dificultad,
+            'explicacion_previa': 'Ley de De Morgan: ¬(A ∨ B) ≡ (¬A ∧ ¬B). El NOT exterior entra negando a cada uno y cambia el OR (∨) por AND (∧).',
+            'pistas': [
+                f'A ∨ B = {a_str} ∨ {b_str} = {"V" if (a or b) else "F"}',
+                f'Negando el resultado: ¬({"V" if (a or b) else "F"}) = {res_str}',
+            ],
+            'numeros': {'A': a_str, 'B': b_str},
         }
 
 

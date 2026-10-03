@@ -11,7 +11,8 @@ from database import init_db, obtener_perfil, actualizar_perfil, obtener_leccion
     obtener_leccion, registrar_ejercicio, obtener_historial, obtener_estadisticas, \
     obtener_logros, verificar_logros, actualizar_racha, exportar_datos, importar_datos, \
     registrar_evaluacion_diagnostica, obtener_repasos_pendientes, actualizar_leccion, \
-    desbloquear_lecciones_siguientes
+    desbloquear_lecciones_siguientes, programar_repaso_sm2, obtener_repasos_del_dia, \
+    completar_repaso_sm2
 from ejercicios import generar_ejercicio, verificar_respuesta, clasificar_error, \
     obtener_explicacion, generar_evaluacion_diagnostica, analizar_diagnostico
 from teoria import obtener_teoria_leccion
@@ -151,6 +152,7 @@ def api_evaluar_examen(leccion_id):
         actualizar_leccion(leccion_id, porcentaje_dominio=100.0, estado='dominado')
         desbloquear_lecciones_siguientes(leccion_id)
         actualizar_racha()
+        programar_repaso_sm2(leccion_id)  # Programa repetición espaciada SM-2 (Día 1, 3, 7, 21)
         logros_nuevos = verificar_logros()
 
     return jsonify({
@@ -328,6 +330,26 @@ def api_estadisticas():
 def api_repasos():
     repasos = obtener_repasos_pendientes()
     return jsonify(repasos)
+
+
+@app.route('/api/repasos/hoy', methods=['GET'])
+def api_repasos_hoy():
+    """Obtener temas programados para repasar hoy según SM-2."""
+    repasos = obtener_repasos_del_dia()
+    return jsonify({
+        'total': len(repasos),
+        'repasos': repasos
+    })
+
+
+@app.route('/api/repasos/<int:repaso_id>/completar', methods=['POST'])
+def api_completar_repaso(repaso_id):
+    """Completar un repaso y reprogramar el siguiente intervalo SM-2."""
+    datos = request.get_json() or {}
+    resultado = datos.get('resultado', 100)
+    ok = completar_repaso_sm2(repaso_id, resultado)
+    actualizar_racha()
+    return jsonify({'ok': ok})
 
 
 # ============================================================

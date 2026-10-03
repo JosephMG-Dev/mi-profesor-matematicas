@@ -845,6 +845,28 @@ GUIA_TEORICA = {
         ],
         'truco_profesor': 'Memoriza la secuencia mágica: 128, 64, 32, 16, 8, 4, 2, 1. ¡Solo sumas las casillas que tienen un 1!'
     },
+    '6.10': {
+        'titulo': 'Lógica Proposicional y Álgebra Booleana',
+        'subtitulo': 'Tablas de verdad, compuertas lógicas e implicación condicional',
+        'concepto': 'Una proposición es un enunciado que solo puede ser Verdadero (V o 1) o Falso (F o 0). Los operadores lógicos fundamentales son: Conjunción / AND ($p \\land q$, verdadero solo si ambos son V), Disyunción / OR ($p \\lor q$, verdadero si al menos uno es V), Negación / NOT ($\\neg p$, invierte el valor), Disyunción Exclusiva / XOR ($p \\oplus q$, verdadero si son distintos), e Implicación / Condicional ($p \\to q$, falso únicamente cuando una causa Verdadera produce una conclusión Falsa: $V \\to F = F$).',
+        'por_que_funciona': 'El Álgebra de Boole rige la lógica binaria. Las Leyes de De Morgan demuestran que negar una conjunción equivale a la disyunción de las negaciones: $\\neg(p \\land q) \\equiv \\neg p \\lor \\neg q$, y $\\neg(p \\lor q) \\equiv \\neg p \\land \\neg q$.',
+        'conexion_ingenieria': 'Es el núcleo de toda la computación: sentencias condicionales (`if (user.isAdmin && !user.isBlocked)`), optimización de consultas SQL (`WHERE ...`), y el diseño de compuertas lógicas dentro de los transistores del procesador (ALU).',
+        'ejemplo': {
+            'problema': 'Evalúa la expresión booleana: p AND (NOT q) cuando p = Verdadero y q = Verdadero',
+            'pasos': [
+                'Paso 1: Identifica los valores dados: p = V, q = V.',
+                'Paso 2: Aplica la negación NOT sobre q: NOT(V) = F.',
+                'Paso 3: Sustituye en la expresión: V AND F.',
+                'Paso 4: Por la tabla de verdad de AND, si al menos una entrada es Falsa, el resultado es Falso (F).'
+            ],
+            'resultado': 'Falso'
+        },
+        'errores_comunes': [
+            'Confundir OR inclusivo con XOR exclusivo: en OR tradicional, si ambos son V el resultado es V.',
+            'Creer que en la implicación p -> q, si p es Falso el resultado es Falso. ¡Falso! Una premisa falsa siempre hace la implicación Verdadera por vacuidad (F -> F es V, F -> V es V).'
+        ],
+        'truco_profesor': 'Para la implicación p -> q: imagina una promesa "Si apruebas el examen (p), te invito una pizza (q)". Solo te habré mentido si aprobaste y NO te invité (V -> F = F). En cualquier otro caso, la promesa no se rompió.'
+    },
 
     # ============================================================
     # NIVEL 7: MATEMÁTICA PARA LA INGENIERÍA (SÍLABO OFICIAL 2026-2)

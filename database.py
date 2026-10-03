@@ -457,6 +457,7 @@ def _insertar_curriculo(cursor, conn):
         ('6.7', 6, 7, 'Productos notables', 'Binomios al cuadrado y diferencias de cuadrados', 'practica', '["6.6"]'),
         ('6.8', 6, 8, 'Ecuaciones cuadráticas', 'Resolver ecuaciones de segundo grado', 'practica', '["6.7"]'),
         ('6.9', 6, 9, 'Sistemas Numéricos (Binario y Hex)', 'Conversión decimal, binario y hexadecimal', 'practica', '["5.1"]'),
+        ('6.10', 6, 10, 'Lógica Proposicional y Álgebra Booleana', 'Tablas de verdad (AND, OR, NOT, XOR), implicación lógica y sentencias condicionales if/else', 'practica', '["6.9"]'),
 
         # Nivel 7: Matemática para la Ingeniería (Sílabo Oficial 2026-2)
         ('7.1', 7, 1, 'Sesión 1: Números Reales y Desigualdades', 'Intervalos, desigualdades lineales y valor absoluto', 'practica', '["6.4"]'),
@@ -1152,3 +1153,99 @@ def importar_datos(datos):
         conn.rollback()
         conn.close()
         raise e
+
+
+# ============================================================
+# ALGORITMO DE REPETICIÓN ESPACIADA SM-2 (ANKI / DUOLINGO)
+# ============================================================
+
+def programar_repaso_sm2(leccion_id):
+    """Programar siguiente repaso según el algoritmo de repetición espaciada SM-2.
+    
+    Intervalos de fijación de memoria:
+    - 1er repaso: 1 día después de dominar la lección.
+    - 2do repaso: 3 días después.
+    - 3er repaso: 7 días después.
+    - 4to repaso: 21 días después (fijación permanente en memoria a largo plazo).
+    """
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    # Contar repasos completados previos de esta lección
+    cursor.execute("""
+        SELECT COUNT(*) FROM repasos
+        WHERE leccion_id = ? AND (completado = 1 OR completado IS TRUE)
+    """, (leccion_id,))
+    row = cursor.fetchone()
+    completados = row[0] if row else 0
+    
+    # Determinar el intervalo en días
+    intervalos = [1, 3, 7, 21]
+    dias = intervalos[min(completados, len(intervalos) - 1)]
+    
+    fecha_repaso = (datetime.now() + timedelta(days=dias)).strftime('%Y-%m-%d')
+    
+    # Evitar duplicar repasos pendientes para la misma lección
+    cursor.execute("""
+        SELECT COUNT(*) FROM repasos
+        WHERE leccion_id = ? AND (completado = 0 OR completado IS FALSE)
+    """, (leccion_id,))
+    row_pend = cursor.fetchone()
+    pendientes = row_pend[0] if row_pend else 0
+    
+    if pendientes == 0:
+        cursor.execute("""
+            INSERT INTO repasos (leccion_id, fecha_programada, completado)
+            VALUES (?, ?, ?)
+        """, (leccion_id, fecha_repaso, False if is_supabase() else 0))
+        conn.commit()
+    
+    conn.close()
+
+
+def obtener_repasos_del_dia():
+    """Obtener repasos programados para hoy o anteriores que estén pendientes."""
+    conn = get_db()
+    cursor = conn.cursor()
+    hoy = datetime.now().strftime('%Y-%m-%d')
+    
+    cursor.execute("""
+        SELECT r.id, r.leccion_id, r.fecha_programada, l.titulo, l.nivel, l.descripcion
+        FROM repasos r
+        JOIN lecciones l ON r.leccion_id = l.id
+        WHERE (r.completado = 0 OR r.completado IS FALSE) AND r.fecha_programada <= ?
+        ORDER BY r.fecha_programada ASC
+    """, (hoy,))
+    rows = cursor.fetchall()
+    result = rows_to_dicts(rows, cursor)
+    conn.close()
+    return result
+
+
+def completar_repaso_sm2(repaso_id, resultado):
+    """Completar un repaso y programar el siguiente intervalo si aprobó."""
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    cursor.execute("SELECT leccion_id FROM repasos WHERE id = ?", (repaso_id,))
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        return False
+    leccion_id = row[0]
+    
+    ahora = datetime.now().isoformat()
+    cursor.execute("""
+        UPDATE repasos
+        SET completado = ?, fecha_completado = ?, resultado = ?
+        WHERE id = ?
+    """, (True if is_supabase() else 1, ahora, float(resultado), repaso_id))
+    conn.commit()
+    conn.close()
+    
+    # Si obtuvo buen resultado (>= 75%), programar el siguiente repaso SM-2
+    if float(resultado) >= 75.0:
+        programar_repaso_sm2(leccion_id)
+        
+    return True
+
