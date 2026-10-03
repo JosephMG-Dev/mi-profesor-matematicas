@@ -897,52 +897,106 @@ function obtenerTiempoSilencioso() {
     return 1;
 }
 
-// Ayuda completa en práctica
-async function mostrarAyudaCompleta() {
+// Marcar "No sé" en práctica: revela respuesta correcta y explicación con empatía
+async function marcarNoSePractica() {
     if (!Estado.ejercicioActual) return;
     Estado.usaAyuda = true;
+    Estado.intentosActuales++;
+    const tiempoSilencioso = obtenerTiempoSilencioso();
+    detenerTimer();
 
+    // Registrar intento en backend
     try {
-        const explicacion = await api('/api/ejercicio/explicacion', {
+        await api('/api/ejercicio/verificar', {
+            method: 'POST',
+            body: {
+                leccion_id: Estado.leccionActual,
+                respuesta_usuario: '(No sé)',
+                respuesta_correcta: Estado.ejercicioActual.respuesta_correcta,
+                operacion: Estado.ejercicioActual.operacion,
+                tipo_ejercicio: Estado.ejercicioActual.tipo,
+                tiempo_segundos: tiempoSilencioso,
+                intentos: Estado.intentosActuales,
+                uso_ayuda: 1,
+                dificultad: Estado.ejercicioActual.dificultad,
+            }
+        });
+    } catch (e) {
+        console.warn('Registro silencioso:', e);
+    }
+
+    // Traer explicación paso a paso
+    let explicacion = null;
+    try {
+        explicacion = await api('/api/ejercicio/explicacion', {
             method: 'POST',
             body: {
                 leccion_id: Estado.leccionActual,
                 operacion: Estado.ejercicioActual.operacion,
                 respuesta_correcta: Estado.ejercicioActual.respuesta_correcta,
-                respuesta_usuario: document.getElementById('ejRespuesta').value.trim()
+                respuesta_usuario: '(No sé)'
             }
         });
-
-        const container = document.getElementById('ejExplicacion');
-        container.classList.remove('hidden');
-
-        let html = `
-            <div class="card" style="background: rgba(99, 102, 241, 0.08); border: 1px solid rgba(99, 102, 241, 0.3);">
-                <div class="card-title text-primary mb-3">📖 Método de resolución paso a paso:</div>
-                <div class="flex flex-col gap-2 mb-4">
-        `;
-
-        for (const paso of (explicacion.pasos || [])) {
-            html += `<div class="example-step-item">${paso}</div>`;
-        }
-
-        html += `
-                </div>
-                ${explicacion.consejo ? `<div class="text-muted" style="font-size: var(--text-sm)"><strong>Consejo:</strong> ${explicacion.consejo}</div>` : ''}
-                <div class="mt-4">
-                    <button class="btn btn-outline btn-sm" onclick="cambiarFaseTema('teoria')">
-                        📖 Ver teoría completa del tema
-                    </button>
-                </div>
-            </div>
-        `;
-
-        container.innerHTML = html;
-        renderMatematicas(container);
-        document.getElementById('ejRespuesta').focus();
     } catch (e) {
-        console.error('Error al obtener método:', e);
+        console.error(e);
     }
+
+    const feedback = document.getElementById('ejFeedback');
+    feedback.className = 'feedback feedback-friendly';
+    feedback.style.background = 'rgba(99, 102, 241, 0.12)';
+    feedback.style.border = '1px solid var(--color-primary)';
+    feedback.innerHTML = `
+        <div class="feedback-header" style="color: var(--color-primary-light);">
+            <span>🌱</span> ¡No te preocupes por no saberlo! Así es como aprendemos
+        </div>
+        <div class="feedback-message" style="color: var(--color-text);">
+            La respuesta correcta es: <strong class="badge badge-success" style="font-size: 1.15rem; padding: 4px 10px;">${Estado.ejercicioActual.respuesta_correcta}</strong>
+        </div>
+    `;
+    feedback.classList.remove('hidden');
+
+    const container = document.getElementById('ejExplicacion');
+    container.classList.remove('hidden');
+
+    let html = `
+        <div class="card mt-4" style="background: rgba(255, 255, 255, 0.03); border: 1px solid var(--color-border);">
+            <div class="card-title text-primary mb-3">📖 Explicación paso a paso de este ejercicio:</div>
+            <div class="flex flex-col gap-2 mb-4">
+    `;
+    for (const paso of (explicacion?.pasos || [])) {
+        html += `<div class="example-step-item">${paso}</div>`;
+    }
+    html += `
+            </div>
+            ${explicacion?.consejo ? `<div class="tip-box mb-3"><strong>💡 Consejo:</strong> ${explicacion.consejo}</div>` : ''}
+            <div class="mt-2">
+                <button class="btn btn-outline btn-sm" onclick="cambiarFaseTema('teoria')">
+                    📖 Releer teoría completa
+                </button>
+            </div>
+        </div>
+    `;
+    container.innerHTML = html;
+    renderMatematicas(feedback);
+    renderMatematicas(container);
+
+    document.getElementById('ejAcciones').classList.add('hidden');
+    document.getElementById('ejRespuesta').disabled = true;
+
+    const postAcciones = document.getElementById('ejPostAcciones');
+    postAcciones.innerHTML = `
+        <button class="btn btn-primary btn-lg" onclick="generarNuevoEjercicio()">
+            🔄 Practicar otro ejercicio similar
+        </button>
+        <button class="btn btn-outline btn-lg" onclick="cambiarFaseTema('teoria')">
+            📖 Volver a la teoría
+        </button>
+    `;
+    postAcciones.classList.remove('hidden');
+}
+
+async function mostrarAyudaCompleta() {
+    return marcarNoSePractica();
 }
 
 // ============================================================
@@ -991,11 +1045,17 @@ function mostrarPreguntaExamen() {
     Estado.timerInicio = Date.now();
 }
 
-async function responderPreguntaExamen() {
-    const resp = document.getElementById('examRespuesta').value.trim();
-    if (!resp) {
-        document.getElementById('examRespuesta').focus();
-        return;
+function marcarNoSeExamen() {
+    responderPreguntaExamen(true);
+}
+
+async function responderPreguntaExamen(esNoSe = false) {
+    let resp = document.getElementById('examRespuesta').value.trim();
+    if (!resp && !esNoSe) {
+        // En celular o PC, si confirman vacío, lo tomamos como "No sé" para que no queden bloqueados
+        resp = '(No sé)';
+    } else if (esNoSe) {
+        resp = '(No sé)';
     }
 
     const p = Estado.examenPreguntas[Estado.examenPreguntaIdx];
@@ -1053,6 +1113,7 @@ async function finalizarExamen() {
             `;
         });
         det.innerHTML = htmlDetalles;
+        renderMatematicas(det);
 
         // Actualizar header y perfil
         await cargarPerfil();

@@ -1557,17 +1557,263 @@ body {
     font-size: var(--text-sm);
 }
 
-/* Mobile adjustments */
+/* ============================================================
+   RESPONSIVIDAD Y OPTIMIZACIÓN MÓVIL DE PRIMER NIVEL (Mobile First)
+   ============================================================ */
+
+/* Touch optimization - elimina el retraso de 300ms al pulsar botones en celular */
+button, input, select, textarea, a, .lesson-card, .level-filter-btn, .step-btn {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* Tablet / Mobile (<= 860px) */
+@media (max-width: 860px) {
+    .grid-4 {
+        grid-template-columns: repeat(2, 1fr);
+        gap: var(--space-3);
+    }
+
+    .grid-3 {
+        grid-template-columns: 1fr;
+    }
+
+    .grid-2 {
+        grid-template-columns: 1fr;
+        gap: var(--space-4);
+    }
+
+    .topic-stepper {
+        padding: var(--space-2);
+        gap: var(--space-1);
+        overflow-x: auto;
+        scrollbar-width: none;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .topic-stepper::-webkit-scrollbar {
+        display: none;
+    }
+
+    .step-divider {
+        display: none;
+    }
+
+    .step-btn {
+        padding: var(--space-2) var(--space-3);
+        font-size: var(--text-xs);
+        white-space: nowrap;
+        flex: 1 0 auto;
+    }
+}
+
+/* Mobile Devices (<= 640px) */
 @media (max-width: 640px) {
+    /* Header compacto sin desbordamiento */
+    .app-header {
+        padding: var(--space-2) var(--space-3);
+    }
+
+    .header-content {
+        flex-wrap: wrap;
+        gap: var(--space-2);
+        justify-content: space-between;
+    }
+
+    .app-logo {
+        gap: var(--space-2);
+    }
+
+    .app-logo-icon {
+        font-size: 1.4rem;
+    }
+
+    .app-logo-text {
+        font-size: var(--text-base);
+    }
+
+    .header-stats {
+        gap: var(--space-3);
+    }
+
+    .header-stat {
+        font-size: var(--text-xs);
+        gap: 3px;
+    }
+
+    .streak {
+        padding: 3px 8px;
+    }
+
+    /* Pestañas de navegación amigables al tacto */
+    .nav-tabs {
+        padding: var(--space-1) 0;
+        margin-bottom: var(--space-4);
+        scrollbar-width: none;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .nav-tabs::-webkit-scrollbar {
+        display: none;
+    }
+
+    .nav-tab {
+        padding: 8px 12px;
+        font-size: var(--text-xs);
+        border-radius: var(--radius-md);
+    }
+
+    /* Contenedor principal sin desperdicio de márgenes */
+    .main-content {
+        padding: var(--space-3) var(--space-3) var(--space-8) var(--space-3);
+    }
+
+    /* Tarjetas */
+    .card {
+        padding: var(--space-4);
+        border-radius: var(--radius-lg);
+    }
+
+    /* Banner de bienvenida */
     .welcome-banner {
         flex-direction: column;
         text-align: center;
         padding: var(--space-4);
+        gap: var(--space-3);
     }
+
     .welcome-mascot {
+        font-size: 2.5rem;
         margin: 0 auto;
     }
+
+    .welcome-title {
+        font-size: var(--text-lg);
+    }
+
+    .welcome-subtitle {
+        font-size: var(--text-xs);
+    }
+
+    .welcome-badge-line {
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+
     .welcome-quote {
         text-align: left;
+        font-size: 0.75rem;
+    }
+
+    /* Stat cards */
+    .grid-4 {
+        grid-template-columns: repeat(2, 1fr);
+        gap: var(--space-2);
+    }
+
+    .stat-card {
+        padding: var(--space-3);
+        border-radius: var(--radius-lg);
+    }
+
+    .stat-card-icon {
+        width: 36px;
+        height: 36px;
+        font-size: 1.2rem;
+    }
+
+    .stat-card-value {
+        font-size: 1.35rem;
+    }
+
+    .stat-card-label {
+        font-size: 0.72rem;
+    }
+
+    /* Barra de filtros de lecciones: deslizamiento horizontal suave */
+    .level-filter-bar {
+        overflow-x: auto;
+        flex-wrap: nowrap;
+        padding-bottom: var(--space-2);
+        scrollbar-width: none;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .level-filter-bar::-webkit-scrollbar {
+        display: none;
+    }
+
+    .level-filter-btn {
+        flex-shrink: 0;
+        padding: 6px 12px;
+        font-size: 0.75rem;
+    }
+
+    /* Área de ejercicios */
+    .exercise-question {
+        padding: var(--space-4);
+        margin-bottom: var(--space-3);
+        border-radius: var(--radius-lg);
+    }
+
+    .exercise-label {
+        font-size: 0.75rem;
+        margin-bottom: var(--space-2);
+    }
+
+    .exercise-operation {
+        font-size: 1.3rem;
+        padding: var(--space-2) var(--space-3);
+        max-width: 100%;
+        box-sizing: border-box;
+    }
+
+    .input-big {
+        font-size: 1.4rem;
+        min-height: 52px;
+        padding: var(--space-2) var(--space-3);
+    }
+
+    /* Botones de acción de ejercicios: verticales, grandes y cómodos para el pulgar */
+    .exercise-actions {
+        flex-direction: column;
+        width: 100%;
+        gap: var(--space-2);
+    }
+
+    .exercise-actions .btn {
+        width: 100%;
+        min-height: 48px;
+        font-size: var(--text-sm);
+        padding: var(--space-3) var(--space-4);
+        border-radius: var(--radius-lg);
+    }
+
+    /* Stepper en celular */
+    .topic-stepper {
+        border-radius: var(--radius-lg);
+    }
+
+    .step-btn {
+        padding: var(--space-2) var(--space-2);
+        font-size: 0.75rem;
+    }
+
+    .step-num {
+        width: 20px;
+        height: 20px;
+        font-size: 0.7rem;
+    }
+
+    /* Diagnóstico y Examen */
+    .diagnostic-counter {
+        font-size: var(--text-xs);
+    }
+
+    .toast {
+        max-width: 90vw;
+        right: 5vw;
+        bottom: 20px;
+        font-size: var(--text-xs);
     }
 }
