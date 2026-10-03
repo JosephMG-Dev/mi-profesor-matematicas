@@ -72,16 +72,20 @@
             <!-- ============================================================ -->
             <section class="view-section" id="view-diagnostico">
                 <div class="diagnostic-welcome" id="diagnosticoWelcome">
-                    <h1>¡Bienvenido!</h1>
+                    <h1>¡Bienvenido a tu espacio de matemáticas!</h1>
                     <p>
-                        Soy tu profesor personal de matemáticas. Antes de comenzar, quiero conocer
-                        en qué punto te encuentras. Voy a hacerte algunas preguntas sencillas,
-                        empezando por las más básicas.<br><br>
-                        No te preocupes por equivocarte. Esto es solo para saber por dónde empezar.
+                        Soy tu profesor personal. Antes de comenzar, puedes hacer una breve evaluación diagnóstica
+                        para conocer tu nivel, o si prefieres, puedes entrar directamente a las lecciones y aprender a tu propio ritmo.<br><br>
+                        No te preocupes por equivocarte: equivocarse es la forma natural en que aprendemos.
                     </p>
-                    <button class="btn btn-primary btn-lg" onclick="iniciarDiagnostico()">
-                        Comenzar evaluación 🚀
-                    </button>
+                    <div class="flex flex-col sm:flex-row gap-3 justify-center mt-4">
+                        <button class="btn btn-primary btn-lg" onclick="iniciarDiagnostico()">
+                            Comenzar evaluación diagnóstica 🚀
+                        </button>
+                        <button class="btn btn-outline btn-lg" onclick="omitirDiagnostico()">
+                            Empezar a estudiar directamente 📚
+                        </button>
+                    </div>
                 </div>
 
                 <div id="diagnosticoArea" class="hidden">

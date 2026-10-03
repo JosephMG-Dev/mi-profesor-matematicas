@@ -52,19 +52,10 @@ class CompatibleCursor:
         if self._is_pg:
             q = query.replace('?', '%s')
             q = q.replace('ISNULL(', 'COALESCE(')
-            # Adaptaciones de booleanos en PostgreSQL
-            q = q.replace('es_correcto = 1', 'es_correcto IS TRUE')
-            q = q.replace('es_correcto = 0', 'es_correcto IS FALSE')
-            q = q.replace('desbloqueado = 1', 'desbloqueado IS TRUE')
-            q = q.replace('desbloqueado = 0', 'desbloqueado IS FALSE')
-            q = q.replace('completado = 1', 'completado IS TRUE')
-            q = q.replace('completado = 0', 'completado IS FALSE')
-            q = q.replace('resuelto = 1', 'resuelto IS TRUE')
-            q = q.replace('resuelto = 0', 'resuelto IS FALSE')
-            q = q.replace('evaluacion_inicial_completada = 1', 'evaluacion_inicial_completada IS TRUE')
-            q = q.replace('evaluacion_inicial_completada = 0', 'evaluacion_inicial_completada IS FALSE')
-            q = q.replace('uso_ayuda = 1', 'uso_ayuda IS TRUE')
-            q = q.replace('uso_ayuda = 0', 'uso_ayuda IS FALSE')
+            # Adaptaciones de booleanos en PostgreSQL (= 1 -> = TRUE, = 0 -> = FALSE)
+            # Funciona tanto en cláusulas WHERE como en cláusulas UPDATE SET sin errores de sintaxis
+            q = re.sub(r'\b(es_correcto|desbloqueado|completado|resuelto|evaluacion_inicial_completada|uso_ayuda)\s*=\s*1\b', r'\1 = TRUE', q, flags=re.IGNORECASE)
+            q = re.sub(r'\b(es_correcto|desbloqueado|completado|resuelto|evaluacion_inicial_completada|uso_ayuda)\s*=\s*0\b', r'\1 = FALSE', q, flags=re.IGNORECASE)
 
             # Traducir TOP n a LIMIT n
             m = re.search(r'SELECT\s+TOP\s+(\d+)\s+(.+)', q, re.IGNORECASE | re.DOTALL)
@@ -575,7 +566,11 @@ def actualizar_perfil(**kwargs):
     conn = get_db()
     cursor = conn.cursor()
     sets = ', '.join(f"{k} = ?" for k in kwargs)
-    values = list(kwargs.values())
+    if is_supabase():
+        bool_cols = {'evaluacion_inicial_completada', 'uso_ayuda', 'es_correcto', 'desbloqueado', 'completado', 'resuelto'}
+        values = [bool(v) if k in bool_cols else v for k, v in kwargs.items()]
+    else:
+        values = list(kwargs.values())
     cursor.execute(f"UPDATE perfil SET {sets} WHERE id = 1", values)
     conn.commit()
     conn.close()
@@ -643,14 +638,15 @@ def registrar_ejercicio(leccion_id, tipo_ejercicio, operacion, respuesta_correct
     ))
 
     # Actualizar contadores de la lección
+    inc_correcto = 1 if es_correcto else 0
     cursor.execute("""
         UPDATE lecciones
         SET ejercicios_completados = ejercicios_completados + 1,
-            ejercicios_correctos = ejercicios_correctos + CASE WHEN ? = 1 OR ? IS TRUE THEN 1 ELSE 0 END,
+            ejercicios_correctos = ejercicios_correctos + ?,
             ultimo_intento = ?,
             veces_practicada = veces_practicada + 1
         WHERE id = ?
-    """, (es_corr_val, es_corr_val, datetime.now().isoformat(), leccion_id))
+    """, (inc_correcto, datetime.now().isoformat(), leccion_id))
 
     # Recalcular dominio
     _recalcular_dominio(cursor, leccion_id)

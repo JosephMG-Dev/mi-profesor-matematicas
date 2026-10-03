@@ -88,10 +88,22 @@ function renderMatematicas(elemento) {
 document.addEventListener('DOMContentLoaded', async () => {
     await cargarPerfil();
 
-    if (!Estado.perfil || !Estado.perfil.evaluacion_inicial_completada) {
+    const seccionGuardada = localStorage.getItem('ultimaSeccion');
+    const evaluacionOmitida = localStorage.getItem('evaluacionOmitida') === 'true';
+
+    // Si ya completó la evaluación, o ya decidió omitirla, o ya tiene ejercicios resueltos,
+    // o ya estaba navegando en una sección previa:
+    const yaInicio = Estado.perfil && (
+        Estado.perfil.evaluacion_inicial_completada ||
+        evaluacionOmitida ||
+        (seccionGuardada && seccionGuardada !== 'diagnostico')
+    );
+
+    if (!yaInicio) {
         navegarA('diagnostico');
     } else {
-        navegarA('dashboard');
+        const destino = (seccionGuardada && seccionGuardada !== 'diagnostico') ? seccionGuardada : 'dashboard';
+        navegarA(destino);
     }
 });
 
@@ -100,6 +112,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 // NAVEGACIÓN
 // ============================================================
 function navegarA(seccion) {
+    // Recordar la última sección para no perder el progreso al cerrar o recargar
+    try {
+        localStorage.setItem('ultimaSeccion', seccion);
+    } catch (e) {
+        // En caso de modo incógnito restrictivo
+    }
+
     // Ocultar todas las secciones
     document.querySelectorAll('.view-section').forEach(s => s.classList.remove('active'));
 
@@ -167,6 +186,21 @@ function actualizarHeader() {
 // ============================================================
 // EVALUACIÓN DIAGNÓSTICA
 // ============================================================
+async function omitirDiagnostico() {
+    try {
+        localStorage.setItem('evaluacionOmitida', 'true');
+        await api('/api/perfil', {
+            method: 'PUT',
+            body: { evaluacion_inicial_completada: 1 }
+        });
+        if (Estado.perfil) Estado.perfil.evaluacion_inicial_completada = true;
+    } catch (e) {
+        console.warn('Error guardando omisión de diagnóstico:', e);
+    }
+    navegarA('dashboard');
+    mostrarToast('👋 ¡Bienvenido!', 'Explora tus lecciones y aprende a tu propio ritmo.');
+}
+
 async function iniciarDiagnostico() {
     document.getElementById('diagnosticoWelcome').classList.add('hidden');
     document.getElementById('diagnosticoArea').classList.remove('hidden');
