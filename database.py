@@ -8,6 +8,20 @@ import re
 from datetime import datetime, timedelta
 
 try:
+    import pytz
+    TZ_LIMA = pytz.timezone('America/Lima')
+except ImportError:
+    pytz = None
+    TZ_LIMA = None
+
+
+def ahora_lima():
+    """Retorna la hora actual en America/Lima como string isoformat."""
+    if TZ_LIMA:
+        return datetime.now(TZ_LIMA).isoformat()
+    return datetime.now().isoformat()
+
+try:
     import psycopg2
 except ImportError:
     psycopg2 = None
@@ -334,6 +348,30 @@ def init_db():
             resultado FLOAT
         );
         """)
+
+        # ── Migración Fase 1: columnas de sesión activa ──────────────────────
+        cursor.execute("ALTER TABLE sesiones ADD COLUMN IF NOT EXISTS estado VARCHAR(20) DEFAULT 'cerrada'")
+        cursor.execute("ALTER TABLE sesiones ADD COLUMN IF NOT EXISTS ultima_actividad VARCHAR(30)")
+        cursor.execute("ALTER TABLE sesiones ADD COLUMN IF NOT EXISTS tiempo_activo_segundos FLOAT DEFAULT 0")
+        cursor.execute("ALTER TABLE sesiones ADD COLUMN IF NOT EXISTS es_valida BOOLEAN DEFAULT FALSE")
+        # FK ejercicios → sesiones
+        cursor.execute("""
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name='ejercicios' AND column_name='sesion_id'
+                ) THEN
+                    ALTER TABLE ejercicios ADD COLUMN sesion_id INT REFERENCES sesiones(id);
+                END IF;
+            END$$;
+        """)
+        # Índice único parcial: solo una sesión 'abierta' a la vez
+        cursor.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_una_sesion_abierta
+                ON sesiones (estado)
+                WHERE estado = 'abierta';
+        """)
     else:
         # SQL Server 2019
         cursor.execute("""
@@ -402,8 +440,39 @@ def init_db():
             duracion_minutos FLOAT DEFAULT 0,
             ejercicios_resueltos INT DEFAULT 0,
             ejercicios_correctos INT DEFAULT 0,
-            leccion_id NVARCHAR(10)
+            leccion_id NVARCHAR(10),
+            estado NVARCHAR(20) DEFAULT 'cerrada',
+            ultima_actividad NVARCHAR(30),
+            tiempo_activo_segundos FLOAT DEFAULT 0,
+            es_valida BIT DEFAULT 0
         )
+        """)
+
+        # ── Migración Fase 1 SQL Server: columnas de sesión activa ───────────
+        cursor.execute("""
+        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id=OBJECT_ID('sesiones') AND name='estado')
+            ALTER TABLE sesiones ADD estado NVARCHAR(20) DEFAULT 'cerrada'
+        """)
+        cursor.execute("""
+        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id=OBJECT_ID('sesiones') AND name='ultima_actividad')
+            ALTER TABLE sesiones ADD ultima_actividad NVARCHAR(30)
+        """)
+        cursor.execute("""
+        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id=OBJECT_ID('sesiones') AND name='tiempo_activo_segundos')
+            ALTER TABLE sesiones ADD tiempo_activo_segundos FLOAT DEFAULT 0
+        """)
+        cursor.execute("""
+        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id=OBJECT_ID('sesiones') AND name='es_valida')
+            ALTER TABLE sesiones ADD es_valida BIT DEFAULT 0
+        """)
+        cursor.execute("""
+        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id=OBJECT_ID('ejercicios') AND name='sesion_id')
+            ALTER TABLE ejercicios ADD sesion_id INT
+        """)
+        # Índice filtrado SQL Server (equivalente al UNIQUE partial de PG)
+        cursor.execute("""
+        IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name='idx_una_sesion_abierta')
+            CREATE UNIQUE INDEX idx_una_sesion_abierta ON sesiones(estado) WHERE estado = 'abierta'
         """)
 
         cursor.execute("""
@@ -699,26 +768,41 @@ def actualizar_leccion(leccion_id, **kwargs):
 
 def registrar_ejercicio(leccion_id, tipo_ejercicio, operacion, respuesta_correcta,
                         respuesta_usuario, es_correcto, intentos=1, tiempo_segundos=0,
-                        uso_ayuda=0, tipo_error=None, dificultad=1, detalles=None):
-    """Registrar un ejercicio completado."""
+                        uso_ayuda=0, tipo_error=None, dificultad=1, detalles=None,
+                        sesion_id=None):
+    """Registrar un ejercicio completado. sesion_id opcional para vincular a sesión activa."""
     conn = get_db()
     cursor = conn.cursor()
 
     es_corr_val = bool(es_correcto) if is_supabase() else int(es_correcto)
     uso_ayuda_val = bool(uso_ayuda) if is_supabase() else int(uso_ayuda)
 
-    cursor.execute("""
-        INSERT INTO ejercicios
-        (leccion_id, fecha, tipo_ejercicio, operacion, respuesta_correcta,
-         respuesta_usuario, es_correcto, intentos, tiempo_segundos,
-         uso_ayuda, tipo_error, dificultad, detalles)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, (
-        leccion_id, datetime.now().isoformat(), tipo_ejercicio, operacion,
-        str(respuesta_correcta), str(respuesta_usuario), es_corr_val,
-        intentos, tiempo_segundos, uso_ayuda_val, tipo_error, dificultad,
-        json.dumps(detalles or {})
-    ))
+    if sesion_id is not None:
+        cursor.execute("""
+            INSERT INTO ejercicios
+            (leccion_id, fecha, tipo_ejercicio, operacion, respuesta_correcta,
+             respuesta_usuario, es_correcto, intentos, tiempo_segundos,
+             uso_ayuda, tipo_error, dificultad, detalles, sesion_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            leccion_id, ahora_lima(), tipo_ejercicio, operacion,
+            str(respuesta_correcta), str(respuesta_usuario), es_corr_val,
+            intentos, tiempo_segundos, uso_ayuda_val, tipo_error, dificultad,
+            json.dumps(detalles or {}), sesion_id
+        ))
+    else:
+        cursor.execute("""
+            INSERT INTO ejercicios
+            (leccion_id, fecha, tipo_ejercicio, operacion, respuesta_correcta,
+             respuesta_usuario, es_correcto, intentos, tiempo_segundos,
+             uso_ayuda, tipo_error, dificultad, detalles)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            leccion_id, ahora_lima(), tipo_ejercicio, operacion,
+            str(respuesta_correcta), str(respuesta_usuario), es_corr_val,
+            intentos, tiempo_segundos, uso_ayuda_val, tipo_error, dificultad,
+            json.dumps(detalles or {})
+        ))
 
     # Actualizar contadores de la lección
     inc_correcto = 1 if es_correcto else 0
@@ -729,7 +813,17 @@ def registrar_ejercicio(leccion_id, tipo_ejercicio, operacion, respuesta_correct
             ultimo_intento = ?,
             veces_practicada = veces_practicada + 1
         WHERE id = ?
-    """, (inc_correcto, datetime.now().isoformat(), leccion_id))
+    """, (inc_correcto, ahora_lima(), leccion_id))
+
+    # Actualizar contadores de la sesión si está activa
+    if sesion_id is not None:
+        inc_ok = 1 if es_correcto else 0
+        cursor.execute("""
+            UPDATE sesiones
+            SET ejercicios_resueltos = ejercicios_resueltos + 1,
+                ejercicios_correctos = ejercicios_correctos + ?
+            WHERE id = ?
+        """, (inc_ok, sesion_id))
 
     # Actualizar patrones de error si corresponde (excluyendo registros especiales)
     if not es_correcto and tipo_error and not es_registro_excluido(operacion, respuesta_correcta, respuesta_usuario):
@@ -751,6 +845,193 @@ def registrar_ejercicio(leccion_id, tipo_ejercicio, operacion, respuesta_correct
 
     conn.close()
     return exercise_id
+
+
+# ============================================================
+# SESIONES DE ESTUDIO — FASE 1
+# ============================================================
+
+def _sesion_auto_cierre(cursor):
+    """Cierra automáticamente sesiones abandonadas (sin actividad > 30 min)."""
+    limite = ahora_lima()  # referencia temporal
+    # Calculamos el umbral: sesiones con ultima_actividad más antigua de 30 min
+    from datetime import timezone
+    ahora_dt = datetime.fromisoformat(limite)
+    umbral = (ahora_dt - timedelta(minutes=30)).isoformat()
+    es_valida_false = False if is_supabase() else 0
+    cursor.execute("""
+        UPDATE sesiones
+        SET estado = 'cerrada',
+            fecha_fin = ?,
+            es_valida = ?
+        WHERE estado = 'abierta'
+          AND ultima_actividad IS NOT NULL
+          AND ultima_actividad < ?
+    """, (limite, es_valida_false, umbral))
+
+
+def iniciar_sesion() -> int | None:
+    """Inicia una nueva sesión de estudio.
+
+    Cierra automáticamente sesiones abandonadas antes de intentar abrir una nueva.
+    Retorna el ID de la sesión creada, o None si ya hay una sesión abierta.
+    """
+    conn = get_db()
+    cursor = conn.cursor()
+
+    # Primero cerrar sesiones huérfanas
+    _sesion_auto_cierre(cursor)
+    conn.commit()
+
+    # Verificar si ya hay sesión abierta
+    cursor.execute("SELECT id FROM sesiones WHERE estado = 'abierta' LIMIT 1")
+    existente = cursor.fetchone()
+    if existente:
+        conn.close()
+        return None  # Ya existe una sesión abierta
+
+    ahora = ahora_lima()
+    try:
+        cursor.execute("""
+            INSERT INTO sesiones
+            (fecha_inicio, estado, ultima_actividad, tiempo_activo_segundos,
+             ejercicios_resueltos, ejercicios_correctos, es_valida)
+            VALUES (?, 'abierta', ?, 0, 0, 0, ?)
+        """, (ahora, ahora, False if is_supabase() else 0))
+        conn.commit()
+
+        if is_supabase():
+            cursor.execute("SELECT lastval()")
+        else:
+            cursor.execute("SELECT @@IDENTITY")
+        sesion_id = cursor.fetchone()[0]
+    except Exception:
+        # El índice único rechazó la inserción (condición de carrera)
+        conn.rollback()
+        conn.close()
+        return None
+
+    conn.close()
+    return int(sesion_id)
+
+
+def registrar_heartbeat(sesion_id: int) -> bool:
+    """Actualiza ultima_actividad y acumula tiempo_activo_segundos.
+
+    El delta máximo que cuenta es 60 s (evita acumular pausas largas).
+    Retorna True si la sesión existe y está abierta, False en caso contrario.
+    """
+    conn = get_db()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        "SELECT ultima_actividad, tiempo_activo_segundos FROM sesiones WHERE id = ? AND estado = 'abierta'",
+        (sesion_id,)
+    )
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        return False
+
+    ultima_str, tiempo_acum = row[0], row[1] or 0.0
+    ahora_str = ahora_lima()
+
+    # Calcular delta de tiempo real
+    delta = 0.0
+    if ultima_str:
+        try:
+            dt_ultima = datetime.fromisoformat(ultima_str)
+            dt_ahora = datetime.fromisoformat(ahora_str)
+            # Normalizar tzinfo para comparación
+            if dt_ultima.tzinfo is None:
+                delta = (dt_ahora.replace(tzinfo=None) - dt_ultima).total_seconds()
+            else:
+                delta = (dt_ahora - dt_ultima).total_seconds()
+        except Exception:
+            delta = 0.0
+
+    # Máximo 60 s por intervalo (evita acumular pausas)
+    delta = min(delta, 60.0)
+    nuevo_tiempo = tiempo_acum + max(delta, 0.0)
+
+    cursor.execute("""
+        UPDATE sesiones
+        SET ultima_actividad = ?,
+            tiempo_activo_segundos = ?
+        WHERE id = ? AND estado = 'abierta'
+    """, (ahora_str, nuevo_tiempo, sesion_id))
+    conn.commit()
+    conn.close()
+    return True
+
+
+def cerrar_sesion(sesion_id: int, forzado: bool = False) -> dict:
+    """Cierra la sesión y calcula métricas finales.
+
+    es_valida = True si ejercicios_resueltos >= 3.
+    Retorna resumen con duracion_minutos, ejercicios_resueltos, es_valida.
+    """
+    conn = get_db()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        "SELECT fecha_inicio, ejercicios_resueltos, ejercicios_correctos FROM sesiones WHERE id = ? AND estado = 'abierta'",
+        (sesion_id,)
+    )
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        return {'ok': False, 'motivo': 'sesion_no_encontrada'}
+
+    fecha_inicio_str, ej_resueltos, ej_correctos = row[0], row[1] or 0, row[2] or 0
+    ahora_str = ahora_lima()
+
+    # Duración
+    duracion_min = 0.0
+    try:
+        dt_inicio = datetime.fromisoformat(fecha_inicio_str)
+        dt_fin = datetime.fromisoformat(ahora_str)
+        if dt_inicio.tzinfo is None:
+            duracion_min = (dt_fin.replace(tzinfo=None) - dt_inicio).total_seconds() / 60
+        else:
+            duracion_min = (dt_fin - dt_inicio).total_seconds() / 60
+    except Exception:
+        pass
+
+    es_valida = ej_resueltos >= 3
+    es_valida_val = es_valida if is_supabase() else int(es_valida)
+
+    cursor.execute("""
+        UPDATE sesiones
+        SET estado = 'cerrada',
+            fecha_fin = ?,
+            duracion_minutos = ?,
+            es_valida = ?
+        WHERE id = ?
+    """, (ahora_str, round(duracion_min, 2), es_valida_val, sesion_id))
+    conn.commit()
+    conn.close()
+
+    return {
+        'ok': True,
+        'sesion_id': sesion_id,
+        'duracion_minutos': round(duracion_min, 2),
+        'ejercicios_resueltos': ej_resueltos,
+        'ejercicios_correctos': ej_correctos,
+        'es_valida': es_valida,
+        'forzado': forzado,
+    }
+
+
+def obtener_sesion_activa() -> dict | None:
+    """Retorna la sesión actualmente abierta, o None si no hay ninguna."""
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM sesiones WHERE estado = 'abierta' LIMIT 1")
+    row = cursor.fetchone()
+    result = dict_from_row(row, cursor)
+    conn.close()
+    return result
 
 
 def registrar_o_actualizar_patron_error(cursor, leccion_id, tipo_error, operacion=''):
