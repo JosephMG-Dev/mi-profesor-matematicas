@@ -36,10 +36,6 @@ const Estado = {
     chartProgreso: null,
     chartEvolucion: null,
     chartNiveles: null,
-
-    // Sesión activa (Fase 1)
-    sesionId: null,
-    sesionUltimoHB: 0,  // timestamp del último heartbeat enviado
 };
 
 const NOMBRES_NIVELES = {
@@ -990,11 +986,8 @@ async function marcarNoSePractica() {
                 intentos: Estado.intentosActuales,
                 uso_ayuda: 1,
                 dificultad: Estado.ejercicioActual.dificultad,
-                sesion_id: Estado.sesionId,
             }
         });
-        // Heartbeat al registrar No sé
-        if (!Estado.sesionId) Sesion.iniciar(); else Sesion.heartbeat();
     } catch (e) {
         console.warn('Registro silencioso:', e);
     }
@@ -1222,16 +1215,8 @@ async function verificarEjercicio() {
             intentos: Estado.intentosActuales,
             uso_ayuda: Estado.usaAyuda,
             dificultad: Estado.ejercicioActual.dificultad,
-            sesion_id: Estado.sesionId,
         },
     });
-
-    // Iniciar sesión en el primer ejercicio resuelto (si no hay una activa)
-    if (!Estado.sesionId) {
-        Sesion.iniciar();
-    } else {
-        Sesion.heartbeat();
-    }
 
     if (resultado.es_correcto) {
         Estado.ejerciciosPracticaResueltos++;
@@ -1756,125 +1741,3 @@ function mostrarToast(icono, mensaje, tipo = '') {
         setTimeout(() => toast.remove(), 300);
     }, 4000);
 }
-
-
-// ============================================================
-// SESIÓN DE ESTUDIO — FASE 1
-// ============================================================
-const Sesion = {
-    // Intervalo mínimo entre heartbeats (30 segundos)
-    HB_INTERVALO_MS: 30_000,
-
-    /** Inicia la sesión en el primer ejercicio resuelto. */
-    async iniciar() {
-        if (Estado.sesionId) return; // ya hay sesión
-        try {
-            const res = await fetch('/api/sesion/iniciar', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-            });
-            if (res.ok) {
-                const data = await res.json();
-                if (data.ok) {
-                    Estado.sesionId = data.sesion_id;
-                    Estado.sesionUltimoHB = Date.now();
-                }
-            } else if (res.status === 409) {
-                // Ya había una sesión abierta (reconexión)
-                const data = await res.json();
-                if (data.sesion && data.sesion.id) {
-                    Estado.sesionId = data.sesion.id;
-                    Estado.sesionUltimoHB = Date.now();
-                }
-            }
-        } catch (e) {
-            // Fallo silencioso — la sesión no es crítica para el aprendizaje
-            console.warn('[Sesión] Error al iniciar:', e);
-        }
-    },
-
-    /**
-     * Registra actividad real.
-     * Solo envía al servidor si han pasado al menos HB_INTERVALO_MS ms
-     * y la pestaña está visible.
-     */
-    heartbeat() {
-        if (!Estado.sesionId) return;
-        if (document.hidden) return;
-        const ahora = Date.now();
-        if (ahora - Estado.sesionUltimoHB < this.HB_INTERVALO_MS) return;
-        Estado.sesionUltimoHB = ahora;
-        // Fire-and-forget: no await, no bloquea UX
-        fetch('/api/sesion/heartbeat', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ sesion_id: Estado.sesionId }),
-        }).catch(() => {});
-    },
-
-    /** Cierra la sesión actual. Usa sendBeacon para garantizar entrega. */
-    cerrar(forzado = false) {
-        if (!Estado.sesionId) return;
-        const payload = JSON.stringify({ sesion_id: Estado.sesionId, forzado });
-        const enviado = navigator.sendBeacon
-            ? navigator.sendBeacon('/api/sesion/cerrar', new Blob([payload], { type: 'application/json' }))
-            : false;
-        if (!enviado) {
-            // Fallback sincrónico (keepalive fetch)
-            fetch('/api/sesion/cerrar', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: payload,
-                keepalive: true,
-            }).catch(() => {});
-        }
-        Estado.sesionId = null;
-        Estado.sesionUltimoHB = 0;
-    },
-};
-
-// ── Eventos de actividad real → heartbeat throttled ──────────────────
-const SELECTORES_INTERACTIVOS = [
-    '#ejRespuesta', '#btnVerificar', '#btnPista', '#btnNoSe',
-    '#examRespuesta', '#btnExamVerificar', '#btnExamNoSe',
-];
-document.addEventListener('DOMContentLoaded', () => {
-    SELECTORES_INTERACTIVOS.forEach(sel => {
-        const el = document.querySelector(sel);
-        if (el) {
-            el.addEventListener('click', () => Sesion.heartbeat());
-            el.addEventListener('keydown', () => Sesion.heartbeat());
-            el.addEventListener('input', () => Sesion.heartbeat());
-        }
-    });
-    // Delegación para botones que se crean dinámicamente
-    document.addEventListener('click', e => {
-        if (e.target.closest('.btn') || e.target.closest('input')) {
-            Sesion.heartbeat();
-        }
-    }, { passive: true });
-});
-
-// ── Cierre de sesión al salir / ocultar pestaña ───────────────────
-document.addEventListener('visibilitychange', () => {
-    if (document.hidden) {
-        Sesion.cerrar();
-    }
-});
-window.addEventListener('beforeunload', () => {
-    Sesion.cerrar(true);
-});
-
-// ── Recuperar sesión activa al recargar ─────────────────────────
-document.addEventListener('DOMContentLoaded', async () => {
-    try {
-        const sesion = await fetch('/api/sesion/activa').then(r => r.json());
-        if (sesion && sesion.id) {
-            Estado.sesionId = sesion.id;
-            Estado.sesionUltimoHB = Date.now();
-        }
-    } catch (e) {
-        // No bloquea la carga
-    }
-});
-

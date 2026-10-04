@@ -13,8 +13,7 @@ from database import init_db, obtener_perfil, actualizar_perfil, obtener_leccion
     registrar_evaluacion_diagnostica, obtener_repasos_pendientes, actualizar_leccion, \
     desbloquear_lecciones_siguientes, programar_repaso_sm2, obtener_repasos_del_dia, \
     completar_repaso_sm2, obtener_diagnostico_pedagogico, obtener_recomendaciones_pedagogicas, \
-    obtener_patrones_error, iniciar_sesion, registrar_heartbeat, cerrar_sesion, \
-    obtener_sesion_activa
+    obtener_patrones_error
 from ejercicios import generar_ejercicio, verificar_respuesta, clasificar_error, \
     obtener_explicacion, generar_evaluacion_diagnostica, analizar_diagnostico
 from teoria import obtener_teoria_leccion
@@ -372,50 +371,6 @@ def api_completar_repaso(repaso_id):
     ok = completar_repaso_sm2(repaso_id, resultado)
     actualizar_racha()
     return jsonify({'ok': ok})
-
-
-# ============================================================
-# API - SESIONES DE ESTUDIO
-# ============================================================
-
-@app.route('/api/sesion/iniciar', methods=['POST'])
-def api_sesion_iniciar():
-    """Inicia una nueva sesión de estudio. Devuelve 409 si ya hay una abierta."""
-    sesion_id = iniciar_sesion()
-    if sesion_id is None:
-        sesion = obtener_sesion_activa()
-        return jsonify({'ok': False, 'motivo': 'ya_existe_sesion_abierta', 'sesion': sesion}), 409
-    return jsonify({'ok': True, 'sesion_id': sesion_id}), 201
-
-
-@app.route('/api/sesion/heartbeat', methods=['POST'])
-def api_sesion_heartbeat():
-    """Registra actividad en la sesión activa."""
-    datos = request.get_json() or {}
-    sesion_id = datos.get('sesion_id')
-    if not sesion_id:
-        return jsonify({'ok': False, 'motivo': 'falta_sesion_id'}), 400
-    ok = registrar_heartbeat(int(sesion_id))
-    return jsonify({'ok': ok})
-
-
-@app.route('/api/sesion/cerrar', methods=['POST'])
-def api_sesion_cerrar():
-    """Cierra la sesión activa y retorna el resumen."""
-    datos = request.get_json() or {}
-    sesion_id = datos.get('sesion_id')
-    forzado = datos.get('forzado', False)
-    if not sesion_id:
-        return jsonify({'ok': False, 'motivo': 'falta_sesion_id'}), 400
-    resultado = cerrar_sesion(int(sesion_id), forzado=bool(forzado))
-    return jsonify(resultado)
-
-
-@app.route('/api/sesion/activa', methods=['GET'])
-def api_sesion_activa():
-    """Retorna la sesión actualmente abierta, o null si no hay ninguna."""
-    sesion = obtener_sesion_activa()
-    return jsonify(sesion)
 
 
 # ============================================================
