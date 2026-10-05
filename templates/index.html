@@ -33,21 +33,23 @@
                     <span class="app-logo-icon">🎓</span>
                     <span class="app-logo-text">Mi Profesor de Mates</span>
                 </a>
-                <div class="header-stats" id="headerStats">
-                    <div class="streak" id="headerStreak">
-                        <span class="streak-fire">🔥</span>
-                        <span class="streak-count" id="headerRacha">0</span>
-                        <span class="text-muted" style="font-size: var(--text-sm)">días</span>
+                <div class="header-actions">
+                    <div class="header-stats" id="headerStats">
+                        <div class="streak" id="headerStreak">
+                            <span class="streak-fire">🔥</span>
+                            <span class="streak-count" id="headerRacha">0</span>
+                            <span class="text-muted" style="font-size: var(--text-sm)">días</span>
+                        </div>
+                        <div class="header-stat">
+                            <span>📊</span>
+                            <span class="header-stat-value" id="headerAciertos">0%</span>
+                        </div>
+                        <div class="header-stat">
+                            <span>📝</span>
+                            <span class="header-stat-value" id="headerEjercicios">0</span>
+                        </div>
                     </div>
-                    <div class="header-stat">
-                        <span>📊</span>
-                        <span class="header-stat-value" id="headerAciertos">0%</span>
-                    </div>
-                    <div class="header-stat">
-                        <span>📝</span>
-                        <span class="header-stat-value" id="headerEjercicios">0</span>
-                    </div>
-                    <button id="btnTerminarSesion" class="btn btn-sm btn-outline" onclick="terminarSesionManual()" style="margin-left: 0.5rem; font-size: 0.8rem; padding: 0.35rem 0.75rem; color: var(--color-text-muted); border-color: var(--color-border);" title="Terminar sesión de estudio">
+                    <button id="btnTerminarSesion" class="btn btn-sm btn-outline btn-terminar-sesion" onclick="terminarSesionManual()" title="Terminar sesión de estudio">
                         Terminar sesión
                     </button>
                 </div>
