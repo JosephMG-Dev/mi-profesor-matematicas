@@ -13,7 +13,8 @@ from database import init_db, obtener_perfil, actualizar_perfil, obtener_leccion
     registrar_evaluacion_diagnostica, obtener_repasos_pendientes, actualizar_leccion, \
     desbloquear_lecciones_siguientes, programar_repaso_sm2, obtener_repasos_del_dia, \
     completar_repaso_sm2, obtener_diagnostico_pedagogico, obtener_recomendaciones_pedagogicas, \
-    obtener_patrones_error
+    obtener_patrones_error, iniciar_sesion, registrar_heartbeat, cerrar_sesion, obtener_sesion_activa, \
+    validar_sesion_abierta
 from ejercicios import generar_ejercicio, verificar_respuesta, clasificar_error, \
     obtener_explicacion, generar_evaluacion_diagnostica, analizar_diagnostico
 from teoria import obtener_teoria_leccion
@@ -103,8 +104,18 @@ def api_generar_examen(leccion_id):
 @app.route('/api/lecciones/<leccion_id>/examen/evaluar', methods=['POST'])
 def api_evaluar_examen(leccion_id):
     """Evaluar respuestas del examen final de la lección."""
-    datos = request.get_json()
+    datos = request.get_json() or {}
     respuestas = datos.get('respuestas', [])
+    sesion_id = datos.get('sesion_id')
+    try:
+        sesion_id = int(sesion_id) if sesion_id is not None else None
+    except (ValueError, TypeError):
+        sesion_id = None
+
+    # Comprueba que la sesión exista y esté abierta; si no, usa None
+    if sesion_id is not None:
+        sesion_id = validar_sesion_abierta(sesion_id)
+
     total = len(respuestas)
     correctas = 0
     detalles = []
@@ -134,7 +145,8 @@ def api_evaluar_examen(leccion_id):
             tiempo_segundos=t,
             uso_ayuda=0,
             tipo_error=tipo_error,
-            dificultad=d
+            dificultad=d,
+            sesion_id=sesion_id
         )
 
         detalles.append({
@@ -183,7 +195,7 @@ def api_generar_ejercicio():
 
 @app.route('/api/ejercicio/verificar', methods=['POST'])
 def api_verificar_ejercicio():
-    datos = request.get_json()
+    datos = request.get_json() or {}
     respuesta_usuario = datos.get('respuesta_usuario', '')
     respuesta_correcta = datos.get('respuesta_correcta', '')
     leccion_id = datos.get('leccion_id', '1.1')
@@ -193,6 +205,15 @@ def api_verificar_ejercicio():
     intentos = datos.get('intentos', 1)
     uso_ayuda = datos.get('uso_ayuda', False)
     dificultad = datos.get('dificultad', 1)
+    sesion_id = datos.get('sesion_id')
+    try:
+        sesion_id = int(sesion_id) if sesion_id is not None else None
+    except (ValueError, TypeError):
+        sesion_id = None
+
+    # Comprueba que la sesión exista y esté abierta; si no, usa None
+    if sesion_id is not None:
+        sesion_id = validar_sesion_abierta(sesion_id)
 
     # Verificación matemática directa
     es_correcto = verificar_respuesta(respuesta_usuario, respuesta_correcta)
@@ -215,6 +236,7 @@ def api_verificar_ejercicio():
         uso_ayuda=int(uso_ayuda),
         tipo_error=tipo_error,
         dificultad=dificultad,
+        sesion_id=sesion_id,
     )
 
     # Actualizar racha
@@ -371,6 +393,59 @@ def api_completar_repaso(repaso_id):
     ok = completar_repaso_sm2(repaso_id, resultado)
     actualizar_racha()
     return jsonify({'ok': ok})
+
+
+# ============================================================
+# API - SESIONES DE ESTUDIO
+# ============================================================
+
+@app.route('/api/sesion/iniciar', methods=['POST'])
+def api_sesion_iniciar():
+    """Inicia una sesión de estudio o retoma la abierta existente."""
+    sesion_id, reanudada = iniciar_sesion()
+    return jsonify({'ok': True, 'sesion_id': sesion_id, 'reanudada': reanudada})
+
+
+@app.route('/api/sesion/heartbeat', methods=['POST'])
+def api_sesion_heartbeat():
+    """Registra actividad real en la sesión activa."""
+    datos = request.get_json() or {}
+    raw_sesion_id = datos.get('sesion_id')
+    if raw_sesion_id is None:
+        return jsonify({'ok': False, 'motivo': 'falta_sesion_id'}), 400
+    try:
+        sesion_id = int(raw_sesion_id)
+    except (ValueError, TypeError):
+        return jsonify({'ok': False, 'motivo': 'sesion_id_invalido'}), 400
+    resultado = registrar_heartbeat(sesion_id)
+    return jsonify(resultado)
+
+
+@app.route('/api/sesion/cerrar', methods=['POST'])
+def api_sesion_cerrar():
+    """Cierra la sesión activa y retorna el resumen."""
+    datos = request.get_json() or {}
+    raw_sesion_id = datos.get('sesion_id')
+    if raw_sesion_id is None:
+        return jsonify({'ok': False, 'motivo': 'falta_sesion_id'}), 400
+    try:
+        sesion_id = int(raw_sesion_id)
+    except (ValueError, TypeError):
+        return jsonify({'ok': False, 'motivo': 'sesion_id_invalido'}), 400
+
+    motivo = datos.get('motivo', 'manual')
+    if motivo not in {'manual', 'inactividad', 'cierre_pestana'}:
+        motivo = 'manual'
+
+    resultado = cerrar_sesion(sesion_id, motivo=motivo)
+    return jsonify(resultado)
+
+
+@app.route('/api/sesion/activa', methods=['GET'])
+def api_sesion_activa():
+    """Retorna la sesión abierta no vencida, o null."""
+    sesion = obtener_sesion_activa()
+    return jsonify(sesion)
 
 
 # ============================================================

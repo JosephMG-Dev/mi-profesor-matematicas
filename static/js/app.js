@@ -7,6 +7,8 @@
 // ESTADO GLOBAL
 // ============================================================
 const Estado = {
+    sesionId: null,
+    sesionExpiradaPendiente: false,
     perfil: null,
     leccionActual: null,
     ejercicioActual: null,
@@ -86,9 +88,157 @@ function renderMatematicas(elemento) {
 
 
 // ============================================================
+// GESTIÓN DE SESIONES DE ESTUDIO (FASE 1)
+// ============================================================
+let ultimoHeartbeat = 0;
+
+function mostrarBienvenida() {
+    const bienvenida = document.getElementById('pantallaBienvenida');
+    const appEl = document.getElementById('app');
+    if (bienvenida) {
+        bienvenida.classList.remove('hidden');
+        bienvenida.style.display = 'flex';
+    }
+    if (appEl) {
+        appEl.classList.add('hidden');
+    }
+}
+
+function mostrarApp() {
+    const bienvenida = document.getElementById('pantallaBienvenida');
+    const appEl = document.getElementById('app');
+    if (bienvenida) {
+        bienvenida.classList.add('hidden');
+        bienvenida.style.display = 'none';
+    }
+    if (appEl) {
+        appEl.classList.remove('hidden');
+    }
+}
+
+async function verificarSesionActiva() {
+    try {
+        const sesion = await api('/api/sesion/activa');
+        if (sesion && sesion.id && sesion.estado === 'abierta') {
+            Estado.sesionId = sesion.id;
+            Estado.sesionExpiradaPendiente = false;
+            mostrarApp();
+            return true;
+        } else {
+            Estado.sesionId = null;
+            mostrarBienvenida();
+            return false;
+        }
+    } catch (e) {
+        console.error('Error comprobando sesión activa:', e);
+        Estado.sesionId = null;
+        mostrarBienvenida();
+        return false;
+    }
+}
+
+async function empezarSesion() {
+    const btn = document.getElementById('btnEmpezarSesion');
+    if (btn) btn.disabled = true;
+    try {
+        const res = await api('/api/sesion/iniciar', { method: 'POST' });
+        if (res && res.ok && res.sesion_id) {
+            Estado.sesionId = res.sesion_id;
+            Estado.sesionExpiradaPendiente = false;
+            ultimoHeartbeat = Date.now();
+            mostrarApp();
+
+            if (!Estado.perfil) {
+                await cargarPerfil();
+            }
+
+            const seccionGuardada = localStorage.getItem('ultimaSeccion');
+            const evaluacionOmitida = localStorage.getItem('evaluacionOmitida') === 'true';
+            const yaInicio = Estado.perfil && (
+                Estado.perfil.evaluacion_inicial_completada ||
+                evaluacionOmitida ||
+                (seccionGuardada && seccionGuardada !== 'diagnostico')
+            );
+
+            if (!yaInicio) {
+                navegarA('diagnostico');
+            } else {
+                const destino = (seccionGuardada && seccionGuardada !== 'diagnostico') ? seccionGuardada : 'dashboard';
+                navegarA(destino);
+            }
+        }
+    } catch (e) {
+        console.error('Error al iniciar sesión:', e);
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+}
+
+async function terminarSesionManual() {
+    const sid = Estado.sesionId;
+    Estado.sesionId = null;
+    Estado.sesionExpiradaPendiente = false;
+    detenerTimer();
+    mostrarBienvenida();
+
+    if (sid) {
+        try {
+            await api('/api/sesion/cerrar', {
+                method: 'POST',
+                body: { sesion_id: sid, motivo: 'manual' }
+            });
+        } catch (e) {
+            console.error('Error al cerrar sesión:', e);
+        }
+    }
+}
+
+async function registrarActividadHeartbeat() {
+    if (!Estado.sesionId) return;
+    if (document.hidden) return;
+
+    const ahora = Date.now();
+    if (ahora - ultimoHeartbeat < 30000) return;
+    ultimoHeartbeat = ahora;
+
+    try {
+        const res = await api('/api/sesion/heartbeat', {
+            method: 'POST',
+            body: { sesion_id: Estado.sesionId }
+        });
+
+        if (res && res.expirada) {
+            Estado.sesionId = null;
+            if (!Estado.ejercicioActual && (!Estado.examenPreguntas || !Estado.examenPreguntas.length)) {
+                mostrarBienvenida();
+            } else {
+                Estado.sesionExpiradaPendiente = true;
+            }
+        }
+    } catch (e) {
+        console.error('Error en heartbeat de sesión:', e);
+    }
+}
+
+function inicializarListenersSesion() {
+    window.addEventListener('click', registrarActividadHeartbeat);
+    window.addEventListener('keydown', registrarActividadHeartbeat);
+    window.addEventListener('input', registrarActividadHeartbeat);
+    window.addEventListener('scroll', registrarActividadHeartbeat, { passive: true });
+}
+
+
+// ============================================================
 // INICIALIZACIÓN
 // ============================================================
 document.addEventListener('DOMContentLoaded', async () => {
+    inicializarListenersSesion();
+    const tieneSesion = await verificarSesionActiva();
+
+    if (!tieneSesion) {
+        return; // Permanece en la pantalla de bienvenida; abrir o refrescar NUNCA crea sesión
+    }
+
     await cargarPerfil();
 
     const seccionGuardada = localStorage.getItem('ultimaSeccion');
@@ -115,6 +265,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 // NAVEGACIÓN
 // ============================================================
 function navegarA(seccion) {
+    if (Estado.sesionExpiradaPendiente) {
+        Estado.sesionExpiradaPendiente = false;
+        Estado.ejercicioActual = null;
+        mostrarBienvenida();
+        return;
+    }
     // Recordar la última sección para no perder el progreso al cerrar o recargar
     try {
         localStorage.setItem('ultimaSeccion', seccion);
@@ -986,6 +1142,7 @@ async function marcarNoSePractica() {
                 intentos: Estado.intentosActuales,
                 uso_ayuda: 1,
                 dificultad: Estado.ejercicioActual.dificultad,
+                sesion_id: Estado.sesionId || null,
             }
         });
     } catch (e) {
@@ -1148,7 +1305,10 @@ async function finalizarExamen() {
     try {
         const resultado = await api(`/api/lecciones/${Estado.leccionActual}/examen/evaluar`, {
             method: 'POST',
-            body: { respuestas: Estado.examenRespuestas }
+            body: {
+                respuestas: Estado.examenRespuestas,
+                sesion_id: Estado.sesionId || null,
+            }
         });
 
         const icon = document.getElementById('examIconoResultado');
@@ -1215,6 +1375,7 @@ async function verificarEjercicio() {
             intentos: Estado.intentosActuales,
             uso_ayuda: Estado.usaAyuda,
             dificultad: Estado.ejercicioActual.dificultad,
+            sesion_id: Estado.sesionId || null,
         },
     });
 
@@ -1352,6 +1513,12 @@ function intentarDeNuevo() {
 }
 
 async function siguienteEjercicio() {
+    if (Estado.sesionExpiradaPendiente) {
+        Estado.sesionExpiradaPendiente = false;
+        Estado.ejercicioActual = null;
+        mostrarBienvenida();
+        return;
+    }
     await generarNuevoEjercicio();
 }
 
