@@ -438,14 +438,14 @@
                                     <div>
                                         <h3 style="font-size: var(--text-xl);">🎯 Examen de Dominio</h3>
                                         <div class="text-muted" style="font-size: var(--text-sm);">
-                                            4 preguntas sin pistas ni ayudas. Mide tu conocimiento real para dominar la lección.
+                                            Preguntas sin pistas ni ayudas. Demuestra tu conocimiento real para dominar la lección.
                                         </div>
                                     </div>
-                                    <span class="badge badge-warning" id="examProgresoTexto">Pregunta 1 de 4</span>
+                                    <span class="badge badge-warning" id="examProgresoTexto">Pregunta 1</span>
                                 </div>
 
                                 <div class="progress-bar mb-6">
-                                    <div class="progress-bar-fill" id="examProgressBar" style="width: 25%;"></div>
+                                    <div class="progress-bar-fill" id="examProgressBar" style="width: 0%;"></div>
                                 </div>
 
                                 <div id="examAreaPregunta">
@@ -608,6 +608,18 @@
                         <button class="btn btn-outline" onclick="cambiarObjetivo(15)" id="obj15">15 min</button>
                         <button class="btn btn-outline" onclick="cambiarObjetivo(20)" id="obj20">20 min</button>
                     </div>
+                </div>
+
+                <div class="card mb-6">
+                    <div class="card-title mb-4">🎓 Exigencia de examen de dominio</div>
+                    <div class="flex items-center gap-4">
+                        <button class="btn btn-outline" onclick="cambiarUmbralExamen(80)" id="umbral80">80%</button>
+                        <button class="btn btn-outline" onclick="cambiarUmbralExamen(90)" id="umbral90">90%</button>
+                        <button class="btn btn-outline" onclick="cambiarUmbralExamen(100)" id="umbral100">100%</button>
+                    </div>
+                    <p class="text-muted mt-4" style="font-size: var(--text-sm)">
+                        Porcentaje mínimo de aciertos para aprobar el examen de dominio y desbloquear nuevos temas (por defecto 80%).
+                    </p>
                 </div>
 
                 <div class="card mb-6">

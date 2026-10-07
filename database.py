@@ -778,6 +778,59 @@ def registrar_ejercicio(leccion_id, tipo_ejercicio, operacion, respuesta_correct
     return exercise_id
 
 
+def obtener_operaciones_recientes_leccion(leccion_id, limite=20):
+    """Obtener las últimas operaciones de práctica de una lección para evitar repetición."""
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT operacion FROM ejercicios
+        WHERE leccion_id = ? AND tipo_ejercicio != 'examen'
+        ORDER BY id DESC
+        LIMIT ?
+    """, (leccion_id, limite))
+    rows = cursor.fetchall()
+    conn.close()
+    return [r[0] for r in rows if r and r[0]]
+
+
+def obtener_preguntas_ultimo_examen(leccion_id):
+    """Obtener las operaciones del último examen de la lección para evitar repetirlas."""
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT detalles, operacion FROM ejercicios
+        WHERE leccion_id = ? AND tipo_ejercicio = 'examen'
+        ORDER BY id DESC
+        LIMIT 20
+    """, (leccion_id,))
+    rows = cursor.fetchall()
+    conn.close()
+    if not rows:
+        return []
+
+    ultimo_ex_id = None
+    ops = []
+    for r in rows:
+        det_raw = r[0]
+        det = {}
+        if det_raw:
+            try:
+                det = json.loads(det_raw) if isinstance(det_raw, str) else det_raw
+            except Exception:
+                det = {}
+        ex_id = det.get('examen_id') if isinstance(det, dict) else None
+        if ultimo_ex_id is None and ex_id:
+            ultimo_ex_id = ex_id
+
+        if ultimo_ex_id:
+            if ex_id == ultimo_ex_id:
+                ops.append(r[1])
+        else:
+            ops.append(r[1])
+
+    return ops
+
+
 # ============================================================
 # SESIONES DE ESTUDIO — FASE 1
 # ============================================================
@@ -1236,7 +1289,7 @@ def _recalcular_dominio(cursor, leccion_id):
     """
     cursor.execute(f"""
         SELECT id, leccion_id, operacion, respuesta_correcta, respuesta_usuario,
-               es_correcto, intentos, uso_ayuda, tipo_error, tipo_ejercicio, fecha, dificultad
+               es_correcto, intentos, uso_ayuda, tipo_error, tipo_ejercicio, fecha, dificultad, detalles
         FROM ejercicios
         WHERE leccion_id = ?
           AND {EXCLUSION_SQL}
@@ -1253,10 +1306,44 @@ def _recalcular_dominio(cursor, leccion_id):
     porcentaje_examen = None
     examen_aprobado = False
     if examenes:
-        ultimo_bloque_examen = examenes[-4:]
-        corr_ex = sum(1 for q in ultimo_bloque_examen if q.get('es_correcto'))
-        porcentaje_examen = (corr_ex / len(ultimo_bloque_examen)) * 100.0
-        examen_aprobado = porcentaje_examen >= 75.0
+        # Verificar si el último examen tiene examen_id en detalles
+        ultimo_ej = examenes[-1]
+        detalles_raw = ultimo_ej.get('detalles')
+        detalles = {}
+        if detalles_raw:
+            try:
+                detalles = json.loads(detalles_raw) if isinstance(detalles_raw, str) else detalles_raw
+            except Exception:
+                detalles = {}
+
+        ex_id = detalles.get('examen_id') if isinstance(detalles, dict) else None
+        if ex_id:
+            # Agrupar por el examen_id del último examen
+            ultimo_bloque_examen = []
+            for e in reversed(examenes):
+                d_raw = e.get('detalles')
+                d = {}
+                if d_raw:
+                    try:
+                        d = json.loads(d_raw) if isinstance(d_raw, str) else d_raw
+                    except Exception:
+                        d = {}
+                if isinstance(d, dict) and d.get('examen_id') == ex_id:
+                    ultimo_bloque_examen.append(e)
+                else:
+                    break
+            ultimo_bloque_examen.reverse()
+            corr_ex = sum(1 for q in ultimo_bloque_examen if q.get('es_correcto'))
+            tot_ex = len(ultimo_bloque_examen)
+            porcentaje_examen = (corr_ex / tot_ex) * 100.0 if tot_ex > 0 else 0.0
+            # Usa el 'aprobado' guardado en el intento (inmutable ante cambios de umbral en Ajustes)
+            examen_aprobado = bool(detalles.get('aprobado'))
+        else:
+            # Examen antiguo sin marcas: conserva el comportamiento actual (últimas 4 filas y 75%)
+            ultimo_bloque_examen = examenes[-4:]
+            corr_ex = sum(1 for q in ultimo_bloque_examen if q.get('es_correcto'))
+            porcentaje_examen = (corr_ex / len(ultimo_bloque_examen)) * 100.0 if ultimo_bloque_examen else 0.0
+            examen_aprobado = porcentaje_examen >= 75.0
 
     problemas_practica = consolidar_intentos_problema(practica)
     recientes = problemas_practica[-20:]

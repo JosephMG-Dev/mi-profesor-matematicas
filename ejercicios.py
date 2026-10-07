@@ -84,6 +84,33 @@ def generar_ejercicio(leccion_id, dificultad=1):
     return generador(dificultad)
 
 
+def generar_ejercicio_variado(leccion_id, dificultad=1, excluir=None, max_intentos=40):
+    """Generar un ejercicio evitando operaciones en la lista 'excluir'.
+    Si la lección tiene pocas operaciones o se agotan las opciones,
+    aplica backoff reduciendo progresivamente la ventana de exclusión.
+    """
+    if not excluir:
+        return generar_ejercicio(leccion_id, dificultad)
+
+    excluir_lista = [op for op in excluir if op]
+    if not excluir_lista:
+        return generar_ejercicio(leccion_id, dificultad)
+
+    ventana = len(excluir_lista)
+    intentos_por_ronda = max(5, max_intentos // 3)
+
+    while ventana > 0:
+        conjunto_excluir = set(excluir_lista[:ventana])
+        for _ in range(intentos_por_ronda):
+            ej = generar_ejercicio(leccion_id, dificultad)
+            if ej and ej.get('operacion') not in conjunto_excluir:
+                return ej
+        # Backoff: reducir la ventana para garantizar que siempre haya opciones
+        ventana = ventana // 2
+
+    return generar_ejercicio(leccion_id, dificultad)
+
+
 def verificar_respuesta(respuesta_usuario, respuesta_correcta, tolerancia=0.001):
     """Verificar si la respuesta del usuario es correcta.
 

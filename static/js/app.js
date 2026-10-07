@@ -1059,6 +1059,7 @@ async function generarNuevoEjercicio() {
         body: {
             leccion_id: Estado.leccionActual,
             dificultad: Estado.dificultadActual,
+            operacion_actual: Estado.ejercicioActual ? Estado.ejercicioActual.operacion : null,
         },
     });
 
@@ -1326,7 +1327,9 @@ async function finalizarExamen() {
             icon.textContent = '💪';
             title.textContent = `Puntaje: ${resultado.correctas} de ${resultado.total} (${resultado.porcentaje}%)`;
             title.className = 'text-warning mb-2';
-            msg.textContent = 'Para dominar la lección necesitas al menos 75% (3 de 4). Revisa tus respuestas abajo y practica un poco más.';
+            const umbralReq = resultado.umbral_requerido || 80;
+            const minAciertos = Math.ceil((umbralReq / 100) * (resultado.total || 10));
+            msg.textContent = `Para dominar la lección necesitas al menos ${umbralReq}% (${minAciertos} de ${resultado.total}). Revisa tus respuestas abajo y practica un poco más.`;
         }
 
         // Mostrar detalles de respuestas
@@ -1785,6 +1788,19 @@ async function cargarLogros() {
 // ============================================================
 // AJUSTES
 // ============================================================
+function obtenerUmbralExamenConfigurado() {
+    if (!Estado.perfil || !Estado.perfil.configuracion) return 80;
+    try {
+        const cfg = typeof Estado.perfil.configuracion === 'string'
+            ? JSON.parse(Estado.perfil.configuracion || '{}')
+            : (Estado.perfil.configuracion || {});
+        const u = parseInt(cfg.umbral_examen, 10);
+        return [80, 90, 100].includes(u) ? u : 80;
+    } catch {
+        return 80;
+    }
+}
+
 function cargarAjustes() {
     if (!Estado.perfil) return;
     const objetivo = Estado.perfil.objetivo_diario_minutos || 15;
@@ -1799,6 +1815,39 @@ function cargarAjustes() {
         btnActivo.classList.remove('btn-outline');
         btnActivo.classList.add('btn-primary');
     }
+
+    const umbral = obtenerUmbralExamenConfigurado();
+    document.querySelectorAll('[id^="umbral"]').forEach(btn => {
+        btn.classList.remove('btn-primary');
+        btn.classList.add('btn-outline');
+    });
+
+    const btnUmbral = document.getElementById(`umbral${umbral}`);
+    if (btnUmbral) {
+        btnUmbral.classList.remove('btn-outline');
+        btnUmbral.classList.add('btn-primary');
+    }
+}
+
+async function cambiarUmbralExamen(umbral) {
+    const u = [80, 90, 100].includes(umbral) ? umbral : 80;
+    let cfg = {};
+    try {
+        cfg = typeof Estado.perfil.configuracion === 'string'
+            ? JSON.parse(Estado.perfil.configuracion || '{}')
+            : (Estado.perfil.configuracion || {});
+    } catch {
+        cfg = {};
+    }
+    cfg.umbral_examen = u;
+
+    await api('/api/perfil', {
+        method: 'PUT',
+        body: { configuracion: JSON.stringify(cfg) }
+    });
+    Estado.perfil.configuracion = JSON.stringify(cfg);
+    cargarAjustes();
+    mostrarToast('⚙️', `Exigencia de examen actualizada a ${u}%`);
 }
 
 async function cambiarObjetivo(minutos) {

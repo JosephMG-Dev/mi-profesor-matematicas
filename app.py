@@ -4,6 +4,8 @@ Servidor principal Flask
 """
 import os
 import json
+import time
+import uuid
 from datetime import datetime
 from flask import Flask, render_template, request, jsonify, send_from_directory
 
@@ -14,13 +16,25 @@ from database import init_db, obtener_perfil, actualizar_perfil, obtener_leccion
     desbloquear_lecciones_siguientes, programar_repaso_sm2, obtener_repasos_del_dia, \
     completar_repaso_sm2, obtener_diagnostico_pedagogico, obtener_recomendaciones_pedagogicas, \
     obtener_patrones_error, iniciar_sesion, registrar_heartbeat, cerrar_sesion, obtener_sesion_activa, \
-    validar_sesion_abierta
-from ejercicios import generar_ejercicio, verificar_respuesta, clasificar_error, \
+    validar_sesion_abierta, obtener_operaciones_recientes_leccion, obtener_preguntas_ultimo_examen
+from ejercicios import generar_ejercicio, generar_ejercicio_variado, verificar_respuesta, clasificar_error, \
     obtener_explicacion, generar_evaluacion_diagnostica, analizar_diagnostico
 from teoria import obtener_teoria_leccion
 
 app = Flask(__name__, static_folder='static', template_folder='templates')
 app.config['JSON_AS_ASCII'] = False
+
+
+def obtener_umbral_examen():
+    """Obtener el umbral de aprobación configurado en perfil.configuracion (80, 90 o 100)."""
+    try:
+        perf = obtener_perfil()
+        cfg_raw = perf.get('configuracion') or '{}'
+        cfg = json.loads(cfg_raw) if isinstance(cfg_raw, str) else dict(cfg_raw)
+        u = int(cfg.get('umbral_examen', 80))
+        return u if u in (80, 90, 100) else 80
+    except Exception:
+        return 80
 
 
 # ============================================================
@@ -44,7 +58,39 @@ def api_perfil():
 
 @app.route('/api/perfil', methods=['PUT'])
 def api_actualizar_perfil():
-    datos = request.get_json()
+    datos = request.get_json() or {}
+    if 'configuracion' in datos:
+        cfg_in = datos['configuracion']
+        if isinstance(cfg_in, str):
+            try:
+                cfg_in = json.loads(cfg_in)
+            except Exception:
+                cfg_in = {}
+        elif not isinstance(cfg_in, dict):
+            cfg_in = {}
+
+        perf_actual = obtener_perfil()
+        cfg_actual_raw = perf_actual.get('configuracion') or '{}'
+        try:
+            cfg_actual = json.loads(cfg_actual_raw) if isinstance(cfg_actual_raw, str) else dict(cfg_actual_raw or {})
+        except Exception:
+            cfg_actual = {}
+
+        # Validar umbral_examen (solo 80, 90, 100; cualquier otro -> 80)
+        if 'umbral_examen' in cfg_in:
+            try:
+                u = int(cfg_in['umbral_examen'])
+                cfg_actual['umbral_examen'] = u if u in (80, 90, 100) else 80
+            except (ValueError, TypeError):
+                cfg_actual['umbral_examen'] = 80
+
+        # Conservar otras claves existentes y añadir nuevas sin romper
+        for k, v in cfg_in.items():
+            if k != 'umbral_examen':
+                cfg_actual[k] = v
+
+        datos['configuracion'] = json.dumps(cfg_actual)
+
     actualizar_perfil(**datos)
     return jsonify({'ok': True})
 
@@ -82,18 +128,51 @@ def api_leccion_teoria(leccion_id):
 
 @app.route('/api/lecciones/<leccion_id>/examen/generar', methods=['POST'])
 def api_generar_examen(leccion_id):
-    """Generar examen corto de 4 preguntas sin pistas (estilo Khan Academy)."""
+    """Generar examen de dominio: 10 preguntas sin pistas, todas distintas entre sí.
+    Evita preguntas del examen anterior de esa lección si es posible.
+    En lecciones con espacio reducido, genera el máximo posible de distintas.
+    """
+    ultimas_examen = obtener_preguntas_ultimo_examen(leccion_id)
+    excluir_previas = set(ultimas_examen)
+
+    # Mezcla equilibrada: 5 de dificultad 1 y 5 de dificultad 2
+    dificultades_objetivo = [1, 1, 1, 1, 1, 2, 2, 2, 2, 2]
     preguntas = []
-    dificultades = [1, 1, 2, 2]
-    for d in dificultades:
-        ej = generar_ejercicio(leccion_id, d)
-        preguntas.append({
-            'operacion': ej['operacion'],
-            'respuesta_correcta': ej['respuesta_correcta'],
-            'tipo': ej.get('tipo', 'examen'),
-            'dificultad': d,
-            'explicacion_previa': ej.get('explicacion_previa', '')
-        })
+    operaciones_examen = set()
+
+    for d in dificultades_objetivo:
+        ej = None
+        # Intento 1: distinta en este examen Y no en el examen anterior
+        for _ in range(35):
+            cand = generar_ejercicio(leccion_id, d)
+            op = cand.get('operacion')
+            if op and op not in operaciones_examen and op not in excluir_previas:
+                ej = cand
+                break
+
+        # Intento 2 (relajando el examen anterior si la lección no tiene suficientes distintas):
+        if not ej:
+            for _ in range(35):
+                cand = generar_ejercicio(leccion_id, d)
+                op = cand.get('operacion')
+                if op and op not in operaciones_examen:
+                    ej = cand
+                    break
+
+        if ej:
+            operaciones_examen.add(ej['operacion'])
+            preguntas.append({
+                'operacion': ej['operacion'],
+                'respuesta_correcta': ej['respuesta_correcta'],
+                'tipo': ej.get('tipo', 'examen'),
+                'dificultad': d,
+                'explicacion_previa': ej.get('explicacion_previa', ''),
+                'pistas': []
+            })
+        else:
+            # Si se agotaron las operaciones distintas posibles para esta lección, detener
+            break
+
     return jsonify({
         'leccion_id': leccion_id,
         'preguntas': preguntas,
@@ -103,7 +182,7 @@ def api_generar_examen(leccion_id):
 
 @app.route('/api/lecciones/<leccion_id>/examen/evaluar', methods=['POST'])
 def api_evaluar_examen(leccion_id):
-    """Evaluar respuestas del examen final de la lección."""
+    """Evaluar respuestas del examen final de la lección con umbral configurable."""
     datos = request.get_json() or {}
     respuestas = datos.get('respuestas', [])
     sesion_id = datos.get('sesion_id')
@@ -120,6 +199,25 @@ def api_evaluar_examen(leccion_id):
     correctas = 0
     detalles = []
 
+    # Validar respuestas primero para calcular porcentaje y aprobado
+    for r in respuestas:
+        rc = str(r.get('respuesta_correcta', '')).strip()
+        ru = str(r.get('respuesta_usuario', '')).strip()
+        if verificar_respuesta(ru, rc):
+            correctas += 1
+
+    porcentaje = (correctas / total * 100) if total > 0 else 0
+    umbral = obtener_umbral_examen()
+    aprobado = porcentaje >= umbral
+
+    examen_id = f"ex_{leccion_id}_{int(time.time() * 1000)}_{uuid.uuid4().hex[:6]}"
+    detalles_meta_examen = {
+        'examen_id': examen_id,
+        'total': total,
+        'umbral': umbral,
+        'aprobado': aprobado
+    }
+
     for r in respuestas:
         op = r.get('operacion', '')
         rc = str(r.get('respuesta_correcta', '')).strip()
@@ -128,12 +226,9 @@ def api_evaluar_examen(leccion_id):
         d = r.get('dificultad', 1)
 
         es_ok = verificar_respuesta(ru, rc)
-        if es_ok:
-            correctas += 1
-
         tipo_error = None if es_ok else clasificar_error(leccion_id, op, ru, rc)
 
-        # Registrar de forma silenciosa en la base de datos
+        # Registrar de forma silenciosa en la base de datos con metadatos del examen
         registrar_ejercicio(
             leccion_id=leccion_id,
             tipo_ejercicio='examen',
@@ -146,6 +241,7 @@ def api_evaluar_examen(leccion_id):
             uso_ayuda=0,
             tipo_error=tipo_error,
             dificultad=d,
+            detalles=detalles_meta_examen,
             sesion_id=sesion_id
         )
 
@@ -156,9 +252,6 @@ def api_evaluar_examen(leccion_id):
             'es_correcto': es_ok,
             'explicacion': None if es_ok else obtener_explicacion(leccion_id, op, rc, ru)
         })
-
-    porcentaje = (correctas / total * 100) if total > 0 else 0
-    aprobado = porcentaje >= 75  # 3 de 4 preguntas mínimo
 
     logros_nuevos = []
     if aprobado:
@@ -173,6 +266,7 @@ def api_evaluar_examen(leccion_id):
         'porcentaje': round(porcentaje, 1),
         'correctas': correctas,
         'total': total,
+        'umbral_requerido': umbral,
         'detalles': detalles,
         'logros_nuevos': logros_nuevos,
         'mensaje': '¡Felicitaciones! Has demostrado dominio completo del tema.' if aprobado else 'Estuviste cerca. Te sugiero repasar la teoría y practicar un poco más antes de intentar el examen.'
@@ -185,11 +279,16 @@ def api_evaluar_examen(leccion_id):
 
 @app.route('/api/ejercicio/generar', methods=['POST'])
 def api_generar_ejercicio():
-    datos = request.get_json()
+    datos = request.get_json() or {}
     leccion_id = datos.get('leccion_id', '1.1')
     dificultad = datos.get('dificultad', 1)
+    operacion_actual = datos.get('operacion_actual')
 
-    ejercicio = generar_ejercicio(leccion_id, dificultad)
+    recientes = obtener_operaciones_recientes_leccion(leccion_id, limite=20)
+    if operacion_actual and operacion_actual not in recientes:
+        recientes.insert(0, operacion_actual)
+
+    ejercicio = generar_ejercicio_variado(leccion_id, dificultad, excluir=recientes)
     return jsonify(ejercicio)
 
 
